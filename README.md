@@ -1,0 +1,81 @@
+# Dhaka 3D Endless Runner — Cop Daddy 🚓🇧🇩
+
+[![Deploy to GitHub Pages](https://github.com/Rahat69x/dhaka-3d-game/actions/workflows/deploy.yml/badge.svg)](https://github.com/Rahat69x/dhaka-3d-game/actions/workflows/deploy.yml)
+[![Live Game](https://img.shields.io/badge/Live_Game-GitHub_Pages-success?style=flat&logo=github)](https://rahat69x.github.io/dhaka-3d-game/)
+
+A high-speed 3D endless runner game set in the metropolitan streets of **Dhaka, Bangladesh**. Built using **Three.js**, **HTML5 Canvas**, and **Vanilla Web Audio**, optimized for both desktop and mobile touch browsers.
+
+🎮 **Live Playable Link:** [https://rahat69x.github.io/dhaka-3d-game/](https://rahat69x.github.io/dhaka-3d-game/)
+
+---
+
+## 🌟 Key Features
+
+- **Procedural Dhaka World Generation**: Endless modular carriageway tiles (Straight paths, 90° Junction Turns, and T-Junctions).
+- **Authentic Dhaka Low-Poly Obstacles**:
+  - 🛺 **Cycle Rickshaw** (148 tris): Red body, yellow hood, 3 spoked wheels.
+  - 🛺 **CNG Auto Rickshaw** (136 tris): Distinctive green chassis (`#15803D`), yellow taxi roof, black roll bars.
+  - 🚌 **Local Transit Bus ("Murir Tin")** (164 tris): Blue body with yellow identity stripe and roof cargo luggage.
+  - 🏪 **Street Market Stall (Tong)** (108 tris): 4 bamboo posts, overhead blue tarp canopy (allows sliding underneath!).
+  - 🚧 **DMP Police Barricade & Pothole** (96 tris): Dhaka Metropolitan Police barricade with reflective white stripes and sunken asphalt pothole (requires jump!).
+- **Pursuit Guardian AI**: Cop Daddy (Commander Habib) aggressively pursues the runner, surging into danger distance upon stumbling.
+- **Runners & Skins**: Play as **Dr. Araf** (Executive Suit or Rooftop Casual) or **Cop Daddy**.
+- **100% Offline Capable**: Zero network calls required during gameplay. Local progress (High Score, Gold Coins) persists across browser sessions via `localStorage`.
+- **Mobile Touch Controls**: Full swipe gesture detection (Jump, Slide, Lane Change, 90° Turn) with `touch-action: none` and thumb-friendly floating controls.
+- **WebGL Fallback & Loading Screen**: Smooth loading indicator and hardware acceleration detection.
+
+---
+
+## 🕹️ Controls
+
+| Action | Keyboard | Touch / Mobile Swipe |
+| :--- | :--- | :--- |
+| **Steer Left / Right** | `A` / `D` or `◀` / `▶` | Swipe Left / Right |
+| **90° Turn at Junction** | `A` / `D` or `◀` / `▶` at turn prompt | Swipe in turn direction |
+| **Jump over Barricade** | `W` or `▲` or `Space` | Swipe Up |
+| **Slide under Stalls / Dive** | `S` or `▼` | Swipe Down |
+| **Activate Power-Up** | `Space` (when meter is full) | Double-Tap screen / Power meter |
+| **Pause / Resume** | `P` or `Esc` | Floating Pause button (bottom-right) |
+
+---
+
+## 🚀 Running Locally
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+)
+- [npm](https://www.npmjs.com/)
+
+### Quick Start
+```bash
+# 1. Clone repository
+git clone https://github.com/Rahat69x/dhaka-3d-game.git
+cd dhaka-3d-game
+
+# 2. Install dependencies
+npm install
+
+# 3. Start local development server
+npm run dev
+
+# 4. Build for production (outputs to dist/)
+npm run build
+
+# 5. Preview production build
+npm run preview
+```
+
+---
+
+## 🛠️ Architecture & Tech Stack
+
+- **Graphics Engine**: Three.js (r128) WebGL Renderer
+- **Audio**: Web Audio API (procedural frequency synthesizers for coins, jumping, sliding, and stumble alerts)
+- **Bundler & Build Tool**: Vite 5
+- **Deployment**: GitHub Actions -> GitHub Pages (`actions/deploy-pages@v4`)
+- **Hosting**: GitHub Pages (`https://rahat69x.github.io/dhaka-3d-game/`)
+
+---
+
+## 📄 License
+
+MIT License. Designed and maintained by Rahat.

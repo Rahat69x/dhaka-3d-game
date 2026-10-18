@@ -1,0 +1,2827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        <title>Dhaka 3D Endless Runner — Cop Daddy</title>
+    <meta name="description" content="High-speed 3D endless runner set in the bustling streets of Dhaka, Bangladesh with authentic rickshaws, CNGs, buses, and police pursuit.">
+    <meta name="theme-color" content="#090d16">
+    <meta property="og:title" content="Dhaka 3D Endless Runner — Cop Daddy">
+    <meta property="og:description" content="Play the 3D Dhaka street runner directly in your browser. Fully offline capable with procedural tiles and obstacles.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230f172a'/%3E%3Cpath d='M30 75 L50 25 L70 75 Z' fill='%23f59e0b'/%3E%3Ccircle cx='50' cy='35' r='10' fill='%233b82f6'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #f59e0b;
+            --primary-glow: rgba(245, 158, 11, 0.4);
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --success: #10b981;
+            --bg-dark: #090d16;
+            --panel-bg: rgba(15, 23, 42, 0.88);
+            --panel-border: rgba(255, 255, 255, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            font-family: 'Outfit', sans-serif;
+            color: #f8fafc;
+        }
+
+        #canvas-container {
+            touch-action: none;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Glassmorphic UI Layer */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* HUD - Matched to Visual Reference Layout */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 24px;
+            display: none;
+            pointer-events: none;
+        }
+
+        /* Top-Left: Power-up Gauge */
+        #powerup-gauge-container {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .meter-capsule {
+            width: 52px;
+            height: 120px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 26px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .meter-capsule.ready {
+            border-color: #f59e0b;
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.8), 0 8px 24px rgba(0, 0, 0, 0.5);
+            animation: pulsePower 0.9s infinite alternate;
+            cursor: pointer;
+        }
+
+        @keyframes pulsePower {
+            from { transform: scale(1); filter: drop-shadow(0 0 5px #f59e0b); }
+            to { transform: scale(1.08); filter: drop-shadow(0 0 16px #fbbf24); }
+        }
+
+        #meter-hint {
+            font-size: 10px;
+            font-weight: 800;
+            color: #fbbf24;
+            margin-top: 6px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            letter-spacing: 0.5px;
+            text-align: center;
+            display: none;
+            animation: pulsePower 0.9s infinite alternate;
+        }
+
+        .meter-icon {
+            position: absolute;
+            top: 8px;
+            font-size: 20px;
+            z-index: 2;
+        }
+
+        #meter-fill {
+            width: 100%;
+            height: 0%;
+            background: linear-gradient(180deg, #38bdf8, #2563eb);
+            border-radius: 20px;
+            transition: height 0.15s ease;
+        }
+
+        /* Top-Right: Score & Coin Stack */
+        #top-right-stats {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+            pointer-events: auto;
+        }
+
+        .stat-badge {
+            background: rgba(15, 23, 42, 0.88);
+            border: 1.5px solid rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(12px);
+            border-radius: 14px;
+            padding: 6px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            min-width: 120px;
+            justify-content: flex-end;
+        }
+
+        .stat-badge .stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #94a3b8;
+            font-weight: 700;
+        }
+
+        .stat-badge .stat-value {
+            font-size: 20px;
+            font-weight: 800;
+            color: #ffffff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-badge .stat-value.gold {
+            color: #fbbf24;
+        }
+
+        /* Bottom-Right: Thumb-Friendly Floating Pause Button */
+        #bottom-right-controls {
+            position: absolute;
+            bottom: 30px;
+            right: 24px;
+            pointer-events: auto;
+        }
+
+        .btn-pause-floating {
+            background: rgba(15, 23, 42, 0.9);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            transition: transform 0.15s ease, background 0.15s ease;
+        }
+
+        .btn-pause-floating:hover {
+            transform: scale(1.08);
+            background: #1e293b;
+        }
+
+        .btn-pause-floating:active {
+            transform: scale(0.95);
+        }
+
+        #turn-indicator {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            background: rgba(239, 68, 68, 0.85);
+            border: 2px solid #ffffff;
+            padding: 12px 28px;
+            border-radius: 40px;
+            font-weight: 800;
+            font-size: 18px;
+            letter-spacing: 1px;
+            color: #ffffff;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+            animation: pulse-turn 0.4s infinite alternate;
+        }
+
+        @keyframes pulse-turn {
+            from { transform: translateX(-50%) scale(1); }
+            to { transform: translateX(-50%) scale(1.08); }
+        }
+
+        #danger-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 80px rgba(239, 68, 68, 0);
+            transition: box-shadow 0.3s ease;
+            z-index: 5;
+        }
+
+        #danger-vignette.active {
+            animation: policeFlasher 0.35s infinite alternate ease-in-out;
+        }
+
+        @keyframes policeFlasher {
+            0% { box-shadow: inset 0 0 140px rgba(239, 68, 68, 0.8), inset 0 0 40px rgba(239, 68, 68, 0.95); }
+            100% { box-shadow: inset 0 0 140px rgba(37, 99, 235, 0.8), inset 0 0 40px rgba(37, 99, 235, 0.95); }
+        }
+
+        /* Screens Modal Overlay */
+        .modal-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 8, 15, 0.75);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+            z-index: 20;
+        }
+
+        .modal-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .dialog-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 36px 40px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            transform: scale(0.95);
+            transition: transform 0.25s ease;
+        }
+
+        .modal-screen.active .dialog-card {
+            transform: scale(1);
+        }
+
+        .game-title {
+            font-size: 38px;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 40%, #ffffff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: #94a3b8;
+            margin-bottom: 24px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            background: #1e293b;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            padding: 14px 20px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-family: inherit;
+        }
+
+        .btn:hover {
+            background: #334155;
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn.btn-primary {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-color: #fbbf24;
+            color: #0f172a;
+            box-shadow: 0 4px 20px var(--primary-glow);
+            font-size: 19px;
+            padding: 16px 24px;
+        }
+
+        .btn.btn-primary:hover {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            box-shadow: 0 6px 26px rgba(245, 158, 11, 0.6);
+        }
+
+        .btn.btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-icon-pause {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            color: #ffffff;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Controls Help Box */
+        .controls-hint {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 18px;
+            font-size: 13px;
+            color: #94a3b8;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 12px;
+            border-radius: 12px;
+        }
+
+        .controls-hint span {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 15px;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+        }
+
+        .result-value {
+            font-weight: 800;
+            font-size: 18px;
+        }
+
+        .badge-new {
+            background: #10b981;
+            color: #064e3b;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        /* Missions list */
+        .mission-item {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .mission-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .mission-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .mission-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .mission-fill {
+            height: 100%;
+            background: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <!-- WebGL Fallback Overlay -->
+    <div id="webgl-fallback" class="modal-screen" style="display:none; background:#090d16; z-index:10000; padding:20px;">
+        <div class="dialog-card" style="border-color:#ef4444; max-width:440px;">
+            <h2 style="color:#ef4444; margin-bottom:12px;">⚠️ WebGL Not Supported</h2>
+            <p style="color:#94a3b8; font-size:14px; line-height:1.6; margin-bottom:16px;">
+                Your browser or device does not currently have WebGL 3D acceleration enabled.
+            </p>
+            <p style="color:#cbd5e1; font-size:13px; line-height:1.5;">
+                Please enable <strong>Hardware Acceleration</strong> in your browser settings or try Chrome, Safari, or Edge on a compatible device.
+            </p>
+        </div>
+    </div>
+
+    <!-- Loading Screen Overlay -->
+    <div id="loading-screen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#090d16; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; transition:opacity 0.4s ease;">
+        <div style="font-size:32px; font-weight:900; background:linear-gradient(180deg, #60a5fa 0%, #1d4ed8 50%, #f59e0b 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; filter:drop-shadow(0 0 20px rgba(37,99,235,0.5));">COP DADDY</div>
+        <div style="color:#93c5fd; font-size:12px; letter-spacing:2px; font-weight:700; margin-bottom:24px;">LOADING DHAKA 3D STREETS...</div>
+        <div style="width:220px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; border:1px solid rgba(255,255,255,0.15);">
+            <div id="loading-bar" style="width:15%; height:100%; background:linear-gradient(90deg, #3b82f6, #f59e0b); border-radius:3px; transition:width 0.3s ease;"></div>
+        </div>
+        <div id="loading-text" style="color:#64748b; font-size:11px; margin-top:10px; font-weight:600;">Building procedural tiles...</div>
+    </div>
+    <div id="danger-vignette"></div>
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <!-- Live HUD - Matched to Visual Reference -->
+        <div id="hud" class="interactive">
+            <!-- Top-Left: Power-Up Meter Gauge (Poki Temple Run 2 style) -->
+            <div id="powerup-gauge-container" title="Double-tap or press SPACE to activate when full!">
+                <div class="meter-capsule" id="meter-capsule">
+                    <div class="meter-icon">⚡</div>
+                    <div id="meter-fill"></div>
+                </div>
+                <div id="meter-hint">DOUBLE TAP / SPACE</div>
+            </div>
+
+            <!-- Top-Right: Score, Coins, Distance Stack -->
+            <div id="top-right-stats">
+                <div class="stat-badge">
+                    <span class="stat-label">Score</span>
+                    <span id="hud-score" class="stat-value">0</span>
+                </div>
+                <div class="stat-badge">
+                    <span class="stat-label">Gold</span>
+                    <span id="hud-coins" class="stat-value gold">0</span>
+                </div>
+                <div class="stat-badge" style="padding: 4px 12px; min-width: 90px;">
+                    <span class="stat-label">Dist</span>
+                    <span id="hud-distance" class="stat-value" style="font-size: 15px;">0 m</span>
+                </div>
+            </div>
+
+            <!-- Bottom-Right: Thumb-Friendly Floating Pause Button -->
+            <div id="bottom-right-controls">
+                <button id="btn-pause" class="btn-pause-floating" title="Pause Game">⏸</button>
+            </div>
+        </div>
+
+        <!-- Turn Notice -->
+        <div id="turn-indicator">⚠️ TURN AHEAD! SWIPE TO PIVOT</div>
+
+        <!-- Main Menu -->
+        <div id="menu-screen" class="modal-screen active">
+            <div class="dialog-card">
+                <h1 class="game-title" style="background: linear-gradient(180deg, #60a5fa 0%, #1d4ed8 50%, #f59e0b 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 25px rgba(37, 99, 235, 0.6));">COP DADDY</h1>
+                <div class="subtitle" style="color: #93c5fd; letter-spacing: 2px; font-weight: 700;">HIGH-SPEED POLICE PURSUIT RUNNER</div>
+                <div id="offline-badge" style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.16); border: 1.5px solid #10b981; color: #6ee7b7; font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 20px; margin: 10px auto 14px auto; letter-spacing: 0.5px; box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+                    100% OFFLINE PLAYABLE — ZERO NETWORK REQUIRED
+                </div>
+
+                <div class="btn-group">
+                    <button id="btn-start" class="btn btn-primary">▶ START RUN</button>
+                    <button id="btn-characters" class="btn btn-secondary">👤 CHARACTERS</button>
+                    <button id="btn-maps" class="btn btn-secondary">🗺️ CUSTOM MAPS</button>
+                    <button id="btn-missions" class="btn btn-secondary">🎯 DAILY MISSIONS</button>
+                    <button id="btn-settings" class="btn btn-secondary">⚙️ SETTINGS</button>
+                </div>
+
+                <div class="controls-hint">
+                    <div><span>A & D / ◀ ▶:</span> Steer & 90° Turn</div>
+                    <div><span>W / Up / Space:</span> Jump</div>
+                    <div><span>S / Down:</span> Slide Under</div>
+                    <div><span>Space / 2x Tap:</span> Activate Power Meter</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Character Selection -->
+        <div id="character-screen" class="modal-screen">
+            <div class="dialog-card">
+                <h2>SELECT RUNNER</h2>
+                <div class="subtitle" style="margin-bottom: 16px;">Original Explorers</div>
+                
+                <div id="char-carousel" style="padding: 16px; background: rgba(0,0,0,0.3); border-radius: 14px; margin-bottom: 20px; text-align: center;">
+                    <img id="char-img" src="/dhaka-3d-game/assets/dr_araf_icon.png" alt="Dr. Araf Portrait" style="width: 104px; height: 104px; border-radius: 50%; border: 3px solid #3b82f6; object-fit: cover; margin: 0 auto 10px auto; display: block; box-shadow: 0 4px 18px rgba(59, 130, 246, 0.45);">
+                    <h3 id="char-name" style="color: #fbbf24; font-size: 24px; font-weight: 800;">Dr. Araf</h3>
+                    <div id="char-perk" style="font-size: 13px; color: #38bdf8; margin: 6px 0; font-weight: 700;">Perk: +20% Score Multiplier & Rapid Recovery</div>
+                    <p id="char-desc" style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Lead investigator and forensic researcher navigating high-stakes chases with sharp precision.</p>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-char-prev" class="btn btn-secondary" style="flex: 1;">◀ PREV</button>
+                    <button id="btn-char-select" class="btn btn-primary" style="flex: 2; padding: 12px;">EQUIP</button>
+                    <button id="btn-char-next" class="btn btn-secondary" style="flex: 1;">NEXT ▶</button>
+                </div>
+                <button id="btn-char-back" class="btn btn-secondary" style="margin-top: 14px; width: 100%;">BACK TO MENU</button>
+            </div>
+        </div>
+
+        <!-- Map Selection -->
+        <div id="map-screen" class="modal-screen">
+            <div class="dialog-card">
+                <h2>SELECT MAP</h2>
+                <div class="subtitle" style="margin-bottom: 16px;">Modular Biomes</div>
+                
+                <div id="map-carousel" style="padding: 14px; background: rgba(0,0,0,0.3); border-radius: 14px; margin-bottom: 20px;">
+                    <h3 id="map-name" style="color: #10b981; font-size: 22px;">Ancient Sanctuary</h3>
+                    <div id="map-diff" style="font-size: 13px; color: #f59e0b; margin: 6px 0;">Difficulty: 1.0x (Standard)</div>
+                    <p id="map-desc" style="font-size: 12px; color: #94a3b8;">Mossy temple ruins with winding flagstone paths and ancient archways.</p>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-map-prev" class="btn btn-secondary" style="flex: 1;">◀ PREV</button>
+                    <button id="btn-map-select" class="btn btn-primary" style="flex: 2; padding: 12px;">SELECT</button>
+                    <button id="btn-map-next" class="btn btn-secondary" style="flex: 1;">NEXT ▶</button>
+                </div>
+                <button id="btn-map-back" class="btn btn-secondary" style="margin-top: 14px; width: 100%;">BACK TO MENU</button>
+            </div>
+        </div>
+
+        <!-- Missions Modal -->
+        <div id="missions-screen" class="modal-screen">
+            <div class="dialog-card">
+                <h2>DAILY MISSIONS</h2>
+                <div class="subtitle" style="margin-bottom: 16px;">Resets Daily UTC</div>
+
+                <div id="missions-container">
+                    <div class="mission-item">
+                        <div class="mission-header">
+                            <span>Treasure Seeker</span>
+                            <span style="color: #fbbf24;">+250 Coins</span>
+                        </div>
+                        <div class="mission-desc">Collect 50 gold coins during runs.</div>
+                        <div class="mission-bar"><div id="mission-coins-fill" class="mission-fill" style="width: 0%;"></div></div>
+                    </div>
+                    <div class="mission-item">
+                        <div class="mission-header">
+                            <span>Marathon Sprinter</span>
+                            <span style="color: #fbbf24;">+300 Coins</span>
+                        </div>
+                        <div class="mission-desc">Reach 500 meters in a single run.</div>
+                        <div class="mission-bar"><div id="mission-dist-fill" class="mission-fill" style="width: 0%;"></div></div>
+                    </div>
+                </div>
+
+                <button id="btn-missions-back" class="btn btn-secondary" style="margin-top: 14px; width: 100%;">BACK</button>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-screen" class="modal-screen">
+            <div class="dialog-card">
+                <h2>SETTINGS</h2>
+                <div class="subtitle" style="margin-bottom: 20px;">Audio & Accessibility</div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px; text-align: left; font-size: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Music & SFX Audio:</span>
+                        <input type="checkbox" id="toggle-audio" checked style="width: 20px; height: 20px;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Camera Shake on Stumble:</span>
+                        <input type="checkbox" id="toggle-shake" checked style="width: 20px; height: 20px;">
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Target 60 FPS:</span>
+                        <span style="color: #10b981; font-weight: 700;">Enabled (Active)</span>
+                    </div>
+                </div>
+
+                <button id="btn-settings-back" class="btn btn-secondary" style="margin-top: 24px; width: 100%;">BACK</button>
+            </div>
+        </div>
+
+        <!-- Pause Menu -->
+        <div id="pause-screen" class="modal-screen">
+            <div class="dialog-card">
+                <h2>GAME PAUSED</h2>
+                <div class="subtitle">Run is on hold</div>
+
+                <div class="btn-group">
+                    <button id="btn-resume" class="btn btn-primary">RESUME</button>
+                    <button id="btn-pause-restart" class="btn btn-secondary">RESTART</button>
+                    <button id="btn-pause-menu" class="btn btn-secondary">EXIT TO MENU</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="modal-screen">
+            <div class="dialog-card">
+                <h2 style="color: #ef4444;">RUN OVER</h2>
+                <div id="death-reason" class="subtitle" style="color: #f87171; margin-bottom: 18px;">Apprehended by Cop Daddy!</div>
+
+                <div style="margin: 18px 0; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 14px;">
+                    <div class="result-row">
+                        <span>Final Score</span>
+                        <span id="final-score" class="result-value" style="color: #ffffff;">0</span>
+                    </div>
+                    <div class="result-row">
+                        <span>Distance Covered</span>
+                        <span id="final-dist" class="result-value" style="color: #38bdf8;">0 m</span>
+                    </div>
+                    <div class="result-row">
+                        <span>Coins Collected</span>
+                        <span id="final-coins" class="result-value gold">0</span>
+                    </div>
+                    <div class="result-row">
+                        <span>All-Time Best</span>
+                        <span id="best-score" class="result-value" style="color: #fbbf24;">0 <span id="new-best-badge" class="badge-new" style="display: none;">NEW BEST!</span></span>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button id="btn-gameover-restart" class="btn btn-primary">⚡ PLAY AGAIN</button>
+                    <button id="btn-gameover-menu" class="btn btn-secondary">MAIN MENU</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offline Three.js library -->
+    <script src="/dhaka-3d-game/three.min.js"></script>
+
+    <script>
+
+        // WebGL Feature Detection
+        function isWebGLSupported() {
+            try {
+                const testCanvas = document.createElement('canvas');
+                return !!(window.WebGLRenderingContext && (testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl')));
+            } catch (e) {
+                return false;
+            }
+        }
+
+        if (!isWebGLSupported()) {
+            document.addEventListener('DOMContentLoaded', () => {
+                const ls = document.getElementById('loading-screen');
+                if (ls) ls.style.display = 'none';
+                const fb = document.getElementById('webgl-fallback');
+                if (fb) fb.style.display = 'flex';
+            });
+        }
+
+        /* =================================================================
+           CHRONO RELIC: APEX RUNNER — 3D PLAYABLE WEB COMPANION
+           Full Third-Person 3D Endless Runner Simulation
+           ================================================================= */
+
+        // Web Audio Procedural Synthesizer
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playCoin() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(987.77, this.ctx.currentTime); // B5
+                osc.frequency.exponentialRampToValueAtTime(1318.51, this.ctx.currentTime + 0.1); // E6
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playJump() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(440, this.ctx.currentTime + 0.18);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playSlide() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.28);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.28);
+            }
+
+            playTurn() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(360, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playStumble() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(110, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.35);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.38);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.38);
+
+                // Play high-low police siren surge
+                this.playPoliceSiren();
+            }
+
+            playPoliceSiren() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                const now = this.ctx.currentTime;
+                osc.frequency.setValueAtTime(650, now);
+                osc.frequency.linearRampToValueAtTime(950, now + 0.25);
+                osc.frequency.linearRampToValueAtTime(650, now + 0.5);
+                osc.frequency.linearRampToValueAtTime(950, now + 0.75);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.8);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(now + 0.8);
+            }
+
+            playDeath() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.7);
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.7);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.7);
+            }
+        }
+
+        const audio = new SoundEngine();
+
+                // GitHub Pages Base URL Configuration
+        const BASE_PATH = '/dhaka-3d-game/';
+
+        // Game Configuration & State
+        const CONFIG = {
+            laneWidth: 2.3,
+            baseSpeed: 16.0,
+            maxSpeed: 28.0,
+            accel: 0.08,
+            gravity: 34.0,
+            jumpForce: 12.0,
+            slideDuration: 0.8,
+            segmentLength: 20.0,
+            initialSegments: 7,
+            stumbleDuration: 1.2,
+            normalChaserDist: 8.5,
+            dangerChaserDist: 2.4
+        };
+
+        const STATE = {
+            mode: 'MENU', // MENU, RUNNING, PAUSED, GAMEOVER
+            score: 0,
+            distance: 0,
+            coins: 0,
+            highScore: parseInt(localStorage.getItem('copdaddy_highscore') || localStorage.getItem('chrono_highscore') || '0', 10),
+            totalCoins: parseInt(localStorage.getItem('copdaddy_totalcoins') || localStorage.getItem('chrono_totalcoins') || '0', 10),
+            speed: CONFIG.baseSpeed,
+            currentLane: 0, // -1: Left, 0: Center, 1: Right
+            targetLaneX: 0,
+            playerY: 0,
+            vertVelocity: 0,
+            isJumping: false,
+            isSliding: false,
+            slideTimer: 0,
+            stumbleTimer: 0,
+            isStumbling: false,
+            shieldActive: false,
+            magnetActive: false,
+            magnetTimer: 0,
+            powerMeterCharge: 0,
+            powerMeterReady: false,
+            chaserDistance: CONFIG.normalChaserDist,
+            targetChaserDist: CONFIG.normalChaserDist,
+            cleanRunTimer: 5.0,
+            screenShake: 0,
+            cameraEffects: true,
+            selectedChar: 'Dr. Araf (Executive Suit)',
+            selectedSkin: 'suit',
+            selectedMap: localStorage.getItem('copdaddy_map') || 'Dhaka City (Metropolitan Corridor)',
+            selectedMapId: localStorage.getItem('copdaddy_map_id') || 'dhaka_city'
+        };
+
+        // Three.js Scene Setup
+        let scene, camera, renderer;
+        let playerMesh, chaserMesh, shieldMesh;
+        const activeSegments = [];
+        const segmentPool = [];
+        let currentAttachPos = new THREE.Vector3(0, 0, 0);
+        let currentForward = new THREE.Vector3(0, 0, 1);
+        let currentAngle = 0; // In radians: 0 = Z+, PI/2 = X+, etc.
+        let nextTurnType = null; // 'LEFT', 'RIGHT' or null
+        let turnOpportunity = false;
+        let segmentsUntilTurn = 8;
+
+        function initGraphics() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.012);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 250);
+            camera.position.set(0, 3.4, -5.2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, 0.7);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfef08a, 0.95);
+            dirLight.position.set(15, 30, 20);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // Panoramic Skybox/Backdrop from user YouTube reference (AyBs0dWK1jU)
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(BASE_PATH + 'assets/background.jpg', function(texture) {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.ClampToEdgeWrapping;
+                texture.repeat.set(3, 1);
+                const bgGeo = new THREE.CylinderGeometry(110, 110, 60, 32, 1, true);
+                bgGeo.scale(-1, 1, 1);
+                const bgMat = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    side: THREE.BackSide,
+                    depthWrite: false
+                });
+                const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+                bgMesh.position.set(0, 15, 0);
+                scene.add(bgMesh);
+                scene.userData.bgMesh = bgMesh;
+            });
+
+            buildPlayer();
+            buildChaser();
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+                function buildPlayer(skin = (STATE.selectedSkin || 'suit')) {
+            if (playerMesh) scene.remove(playerMesh);
+
+            const group = new THREE.Group();
+
+            // Dr. Araf Natural Skin Material (warm olive tone calibrated to user photos IMG_6570 and IMG_6571)
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xc08b65, roughness: 0.55 });
+            const darkHairMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 });
+            const eyeScleraMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+            const eyePupilMat = new THREE.MeshBasicMaterial({ color: 0x1c120c });
+            const eyeBrowMat = new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.95 });
+
+            let torsoMat, legMat, shoeMat, cuffMat, tieMat, shirtMat;
+            const policeNavyMat = new THREE.MeshStandardMaterial({ color: 0x14203b, roughness: 0.42, metalness: 0.06 });
+            const beretMat = new THREE.MeshStandardMaterial({ color: 0x0a1224, roughness: 0.85 });
+            const silverMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 });
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.25 });
+            const beltMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.35 });
+
+            if (skin === 'police') {
+                torsoMat = policeNavyMat;
+                legMat = policeNavyMat;
+                shoeMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.25, metalness: 0.2 });
+                cuffMat = policeNavyMat;
+            } else if (skin === 'casual') {
+                // Casual Outfit from IMG_6571: Navy T-shirt, dark jeans, white sneakers
+                torsoMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5f, roughness: 0.7 });
+                legMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.65 });
+                shoeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+            } else {
+                // Executive Suit Outfit from IMG_6570: Black tailored suit, sky blue shirt, navy dotted tie
+                torsoMat = new THREE.MeshStandardMaterial({ color: 0x161618, roughness: 0.35, metalness: 0.08 });
+                legMat = new THREE.MeshStandardMaterial({ color: 0x161618, roughness: 0.35, metalness: 0.08 });
+                shoeMat = new THREE.MeshStandardMaterial({ color: 0x08080a, roughness: 0.2, metalness: 0.35 });
+                cuffMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.4 });
+                shirtMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.4 });
+                tieMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.3, metalness: 0.1 });
+            }
+
+            // --- TORSO ---
+            if (skin === 'police') {
+                // Official Police Commander Uniform from Reference Photo
+                const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.70, 0.82, 0.38), torsoMat);
+                shirt.position.y = 1.05;
+                shirt.castShadow = true;
+                group.add(shirt);
+
+                // Black Collar Tabs with Silver Gorget leaf badges
+                const tabMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.5 });
+                const leftTab = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.18, 0.04), tabMat);
+                leftTab.position.set(-0.13, 1.38, 0.20);
+                leftTab.rotation.z = 0.25;
+                group.add(leftTab);
+
+                const rightTab = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.18, 0.04), tabMat);
+                rightTab.position.set(0.13, 1.38, 0.20);
+                rightTab.rotation.z = -0.25;
+                group.add(rightTab);
+
+                // Shoulder Epaulettes with rank pips
+                const leftEp = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.32), torsoMat);
+                leftEp.position.set(-0.38, 1.44, 0);
+                group.add(leftEp);
+                const leftPip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.06), silverMat);
+                leftPip.position.set(-0.38, 1.48, 0);
+                group.add(leftPip);
+
+                const rightEp = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.32), torsoMat);
+                rightEp.position.set(0.38, 1.44, 0);
+                group.add(rightEp);
+                const rightPip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.06), silverMat);
+                rightPip.position.set(0.38, 1.48, 0);
+                group.add(rightPip);
+
+                // Left Chest: 4 Rows of Ribbon Bars + Silver Badge
+                const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.02), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+                r1.position.set(0.18, 1.20, 0.20);
+                group.add(r1);
+                const r2 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.02), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
+                r2.position.set(0.18, 1.16, 0.20);
+                group.add(r2);
+                const r3 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.02), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+                r3.position.set(0.18, 1.12, 0.20);
+                group.add(r3);
+                const r4 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.02), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
+                r4.position.set(0.18, 1.08, 0.20);
+                group.add(r4);
+                const pShield = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), silverMat);
+                pShield.position.set(0.18, 1.28, 0.20);
+                group.add(pShield);
+
+                // Right Chest: Nameplate 'HABIB', Gold Medallion Pin, Wings
+                const np = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.02), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+                np.position.set(-0.18, 1.14, 0.20);
+                group.add(np);
+                const wings = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.03, 0.02), silverMat);
+                wings.position.set(-0.18, 1.21, 0.20);
+                group.add(wings);
+                const goldPin = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 10), goldMat);
+                goldPin.rotation.x = Math.PI / 2;
+                goldPin.position.set(-0.18, 1.28, 0.20);
+                group.add(goldPin);
+
+                // Tactical Duty Belt with Radio on Left Hip & Holster on Right Hip
+                const belt = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.09, 0.40), beltMat);
+                belt.position.y = 0.68;
+                group.add(belt);
+                const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.10, 0.42), silverMat);
+                buckle.position.y = 0.68;
+                group.add(buckle);
+                const radio = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.10), beltMat);
+                radio.position.set(-0.38, 0.72, 0);
+                group.add(radio);
+                const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.14, 6), beltMat);
+                ant.position.set(-0.38, 0.84, 0);
+                group.add(ant);
+                const holster = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.18, 0.11), beltMat);
+                holster.position.set(0.38, 0.68, 0);
+                group.add(holster);
+            } else if (skin === 'casual') {
+                const tshirt = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.80, 0.36), torsoMat);
+                tshirt.position.y = 1.04;
+                tshirt.castShadow = true;
+                group.add(tshirt);
+
+                const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 16), torsoMat);
+                collar.position.set(0, 1.45, 0.04);
+                group.add(collar);
+            } else {
+                const jacket = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.82, 0.38), torsoMat);
+                jacket.position.y = 1.05;
+                jacket.castShadow = true;
+                group.add(jacket);
+
+                const shirtInsert = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.50, 0.05), shirtMat);
+                shirtInsert.position.set(0, 1.25, 0.18);
+                group.add(shirtInsert);
+
+                const tie = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.48, 0.04), tieMat);
+                tie.position.set(0, 1.15, 0.21);
+                group.add(tie);
+
+                const tieKnot = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.06), tieMat);
+                tieKnot.position.set(0, 1.38, 0.21);
+                group.add(tieKnot);
+
+                const lapelMat = new THREE.MeshStandardMaterial({ color: 0x222225, roughness: 0.25 });
+                const leftLapel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.05), lapelMat);
+                leftLapel.position.set(-0.16, 1.20, 0.19);
+                leftLapel.rotation.z = 0.2;
+                group.add(leftLapel);
+
+                const rightLapel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.05), lapelMat);
+                rightLapel.position.set(0.16, 1.20, 0.19);
+                rightLapel.rotation.z = -0.2;
+                group.add(rightLapel);
+
+                const btnMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.2 });
+                const btn1 = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), btnMat);
+                btn1.position.set(0, 1.02, 0.20);
+                group.add(btn1);
+                const btn2 = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 8), btnMat);
+                btn2.position.set(0, 0.88, 0.20);
+                group.add(btn2);
+            }
+
+            // --- HEAD & REALISTIC FACIAL FEATURES (from IMG_6570 & IMG_6571) ---
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.42, 0.38), skinMat);
+            head.position.y = 1.68;
+            head.castShadow = true;
+            group.add(head);
+
+            const nose = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.08), skinMat);
+            nose.position.set(0, 1.64, 0.22);
+            group.add(nose);
+
+            // Eyes with white sclera and dark pupils
+            const leftEyeSclera = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.045, 0.02), eyeScleraMat);
+            leftEyeSclera.position.set(-0.09, 1.68, 0.192);
+            group.add(leftEyeSclera);
+            const leftPupil = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.025), eyePupilMat);
+            leftPupil.position.set(-0.09, 1.68, 0.196);
+            group.add(leftPupil);
+
+            const rightEyeSclera = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.045, 0.02), eyeScleraMat);
+            rightEyeSclera.position.set(0.09, 1.68, 0.192);
+            group.add(rightEyeSclera);
+            const rightPupil = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.025), eyePupilMat);
+            rightPupil.position.set(0.09, 1.68, 0.196);
+            group.add(rightPupil);
+
+            // Defined Eyebrows
+            const leftBrow = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.035, 0.03), eyeBrowMat);
+            leftBrow.position.set(-0.09, 1.74, 0.20);
+            leftBrow.rotation.z = -0.05;
+            group.add(leftBrow);
+
+            const rightBrow = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.035, 0.03), eyeBrowMat);
+            rightBrow.position.set(0.09, 1.74, 0.20);
+            rightBrow.rotation.z = 0.05;
+            group.add(rightBrow);
+
+            // Mustache & Beard Stubble
+            const mustache = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.055, 0.04), darkHairMat);
+            mustache.position.set(0, 1.55, 0.20);
+            group.add(mustache);
+
+            const chinBeard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.04), darkHairMat);
+            chinBeard.position.set(0, 1.48, 0.19);
+            group.add(chinBeard);
+
+            const leftJawStubble = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.20), darkHairMat);
+            leftJawStubble.position.set(-0.19, 1.54, 0.06);
+            group.add(leftJawStubble);
+
+            const rightJawStubble = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.20), darkHairMat);
+            rightJawStubble.position.set(0.19, 1.54, 0.06);
+            group.add(rightJawStubble);
+
+            if (skin === 'police') {
+                // Thin Rimless Eyeglasses (from police reference photo)
+                const glassMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9, roughness: 0.1 });
+                const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.07, 0.03), glassMat);
+                glasses.position.set(0, 1.68, 0.21);
+                group.add(glasses);
+
+                // Tilted Dark Navy Beret with Silver Police Crest
+                const beret = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.21, 0.14, 18), beretMat);
+                beret.position.set(0.05, 1.96, 0.02);
+                beret.rotation.z = -0.28;
+                group.add(beret);
+
+                const capBadge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.03), silverMat);
+                capBadge.position.set(0.10, 1.95, 0.17);
+                capBadge.rotation.z = -0.28;
+                group.add(capBadge);
+            } else {
+                // Sculpted Wavy Textured Hair for Dr. Araf
+                const hairCrown = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.44), darkHairMat);
+                hairCrown.position.set(0, 1.91, 0.01);
+                group.add(hairCrown);
+
+                const hairLeftPuff = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.38), darkHairMat);
+                hairLeftPuff.position.set(-0.20, 1.86, 0.01);
+                group.add(hairLeftPuff);
+
+                const hairRightPuff = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.38), darkHairMat);
+                hairRightPuff.position.set(0.20, 1.86, 0.01);
+                group.add(hairRightPuff);
+
+                // Signature Forehead Wavy Curl Lock from user photos
+                const foreheadCurl = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.12, 0.12), darkHairMat);
+                foreheadCurl.position.set(0.03, 1.83, 0.20);
+                foreheadCurl.rotation.set(0.22, 0, -0.12);
+                group.add(foreheadCurl);
+            }
+
+            // --- LIMBS & JOINTS FOR ATHLETIC RUNNING ---
+            // Left Leg Group
+            const leftLegGroup = new THREE.Group();
+            leftLegGroup.position.set(-0.18, 0.72, 0);
+            const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.65, 0.20), legMat);
+            leftLeg.position.y = -0.32;
+            leftLegGroup.add(leftLeg);
+            const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.32), shoeMat);
+            leftShoe.position.set(0, -0.66, 0.05);
+            leftLegGroup.add(leftShoe);
+            group.add(leftLegGroup);
+
+            // Right Leg Group
+            const rightLegGroup = new THREE.Group();
+            rightLegGroup.position.set(0.18, 0.72, 0);
+            const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.65, 0.20), legMat);
+            rightLeg.position.y = -0.32;
+            rightLegGroup.add(rightLeg);
+            const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.32), shoeMat);
+            rightShoe.position.set(0, -0.66, 0.05);
+            rightLegGroup.add(rightShoe);
+            group.add(rightLegGroup);
+
+            // Left Arm Group
+            const leftArmGroup = new THREE.Group();
+            leftArmGroup.position.set(-0.45, 1.35, 0);
+            if (skin === 'casual') {
+                const leftSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.22, 0.19), torsoMat);
+                leftSleeve.position.y = -0.10;
+                leftArmGroup.add(leftSleeve);
+                const leftBareArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.44, 0.16), skinMat);
+                leftBareArm.position.y = -0.40;
+                leftArmGroup.add(leftBareArm);
+                const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), skinMat);
+                leftHand.position.y = -0.66;
+                leftArmGroup.add(leftHand);
+            } else {
+                const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.62, 0.18), torsoMat);
+                leftArm.position.y = -0.28;
+                leftArmGroup.add(leftArm);
+                const leftCuff = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.06, 0.19), cuffMat);
+                leftCuff.position.y = -0.58;
+                leftArmGroup.add(leftCuff);
+                const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), skinMat);
+                leftHand.position.y = -0.66;
+                leftArmGroup.add(leftHand);
+            }
+            group.add(leftArmGroup);
+
+            // Right Arm Group
+            const rightArmGroup = new THREE.Group();
+            rightArmGroup.position.set(0.45, 1.35, 0);
+            if (skin === 'casual') {
+                const rightSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.22, 0.19), torsoMat);
+                rightSleeve.position.y = -0.10;
+                rightArmGroup.add(rightSleeve);
+                const rightBareArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.44, 0.16), skinMat);
+                rightBareArm.position.y = -0.40;
+                rightArmGroup.add(rightBareArm);
+                const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), skinMat);
+                rightHand.position.y = -0.66;
+                rightArmGroup.add(rightHand);
+            } else {
+                const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.62, 0.18), torsoMat);
+                rightArm.position.y = -0.28;
+                rightArmGroup.add(rightArm);
+                const rightCuff = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.06, 0.19), cuffMat);
+                rightCuff.position.y = -0.58;
+                rightArmGroup.add(rightCuff);
+                const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), skinMat);
+                rightHand.position.y = -0.66;
+                rightArmGroup.add(rightHand);
+            }
+            group.add(rightArmGroup);
+
+            // Shield Bubble
+            const shieldGeo = new THREE.SphereGeometry(1.25, 20, 20);
+            const shieldShaderMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.45
+            });
+            shieldMesh = new THREE.Mesh(shieldGeo, shieldShaderMat);
+            shieldMesh.position.y = 1.1;
+            shieldMesh.visible = false;
+            group.add(shieldMesh);
+
+            playerMesh = group;
+            playerMesh.userData = {
+                leftLegGroup, rightLegGroup,
+                leftArmGroup, rightArmGroup,
+                runCycle: 0,
+                skin: skin
+            };
+            scene.add(playerMesh);
+        }
+
+        function buildChaser() {
+            // COP DADDY — Lead Police Pursuer Model (Formidable law enforcement commander in deep navy uniform)
+            if (chaserMesh) scene.remove(chaserMesh);
+
+            const group = new THREE.Group();
+
+            // Materials calibrated to user-uploaded police reference photo
+            const uniformMat = new THREE.MeshStandardMaterial({ color: 0x162447, roughness: 0.45, metalness: 0.08 }); // Deep navy blue uniform
+            const beretMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 }); // Midnight wool beret
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.25 }); // Epaulette & badge gold
+            const silverMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 }); // Silver wings & emblem
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xd49d7d, roughness: 0.6 }); // Mature skin tone
+            const darkHairMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 }); // Dark grey/black hair
+            const beltMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.35 }); // Black tactical duty belt
+            const bootMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.3, metalness: 0.2 }); // Black tactical boots
+            const glassFrameMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9 });
+
+            // Scale factor to give Cop Daddy an imposing, commanding presence behind the runner
+            const scale = 1.15;
+
+            // --- TORSO & POLICE SHIRT ---
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85 * scale, 0.95 * scale, 0.44 * scale), uniformMat);
+            torso.position.y = 1.15 * scale;
+            torso.castShadow = true;
+            group.add(torso);
+
+            // Shirt Collar & Lapels
+            const collarLeft = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 0.22 * scale, 0.06 * scale), beretMat);
+            collarLeft.position.set(-0.16 * scale, 1.54 * scale, 0.22 * scale);
+            collarLeft.rotation.z = 0.3;
+            group.add(collarLeft);
+
+            const collarRight = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 0.22 * scale, 0.06 * scale), beretMat);
+            collarRight.position.set(0.16 * scale, 1.54 * scale, 0.22 * scale);
+            collarRight.rotation.z = -0.3;
+            group.add(collarRight);
+
+            // Golden Shoulder Epaulettes (as in reference image)
+            const leftEpaulette = new THREE.Mesh(new THREE.BoxGeometry(0.24 * scale, 0.07 * scale, 0.38 * scale), goldMat);
+            leftEpaulette.position.set(-0.46 * scale, 1.58 * scale, 0);
+            group.add(leftEpaulette);
+
+            const rightEpaulette = new THREE.Mesh(new THREE.BoxGeometry(0.24 * scale, 0.07 * scale, 0.38 * scale), goldMat);
+            rightEpaulette.position.set(0.46 * scale, 1.58 * scale, 0);
+            group.add(rightEpaulette);
+
+            // Flashing Emergency Shoulder Beacons (red on left, blue on right)
+            const beaconMatRed = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+            const beaconRed = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.05 * scale, 0.12 * scale), beaconMatRed);
+            beaconRed.position.set(-0.46 * scale, 1.63 * scale, 0);
+            beaconRed.visible = false;
+            group.add(beaconRed);
+
+            const beaconMatBlue = new THREE.MeshBasicMaterial({ color: 0x3b82f6 });
+            const beaconBlue = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.05 * scale, 0.12 * scale), beaconMatBlue);
+            beaconBlue.position.set(0.46 * scale, 1.63 * scale, 0);
+            beaconBlue.visible = false;
+            group.add(beaconBlue);
+
+            // Left Chest Ribbons (Multi-color rack from reference photo)
+            const ribbonRow1 = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.04 * scale, 0.02 * scale), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+            ribbonRow1.position.set(0.22 * scale, 1.34 * scale, 0.23 * scale);
+            group.add(ribbonRow1);
+
+            const ribbonRow2 = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.04 * scale, 0.02 * scale), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
+            ribbonRow2.position.set(0.22 * scale, 1.28 * scale, 0.23 * scale);
+            group.add(ribbonRow2);
+
+            const ribbonRow3 = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.04 * scale, 0.02 * scale), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+            ribbonRow3.position.set(0.22 * scale, 1.22 * scale, 0.23 * scale);
+            group.add(ribbonRow3);
+
+            // Silver Badge above ribbons
+            const policeShield = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.08 * scale, 0.03 * scale), silverMat);
+            policeShield.position.set(0.22 * scale, 1.44 * scale, 0.23 * scale);
+            group.add(policeShield);
+
+            // Right Chest: Nameplate "COP DADDY" & Gold Medals
+            const nameplate = new THREE.Mesh(new THREE.BoxGeometry(0.22 * scale, 0.05 * scale, 0.02 * scale), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+            nameplate.position.set(-0.22 * scale, 1.26 * scale, 0.23 * scale);
+            group.add(nameplate);
+
+            const wingsBadge = new THREE.Mesh(new THREE.BoxGeometry(0.16 * scale, 0.04 * scale, 0.02 * scale), silverMat);
+            wingsBadge.position.set(-0.22 * scale, 1.34 * scale, 0.23 * scale);
+            group.add(wingsBadge);
+
+            const goldMedal = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * scale, 0.04 * scale, 0.02 * scale, 12), goldMat);
+            goldMedal.rotation.x = Math.PI / 2;
+            goldMedal.position.set(-0.22 * scale, 1.42 * scale, 0.23 * scale);
+            group.add(goldMedal);
+
+            // --- TACTICAL DUTY BELT & ACCESSORIES ---
+            const belt = new THREE.Mesh(new THREE.BoxGeometry(0.88 * scale, 0.12 * scale, 0.46 * scale), beltMat);
+            belt.position.y = 0.68 * scale;
+            group.add(belt);
+
+            const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 0.14 * scale, 0.48 * scale), silverMat);
+            buckle.position.y = 0.68 * scale;
+            group.add(buckle);
+
+            // Radio / Walkie-talkie with antenna on hip
+            const radio = new THREE.Mesh(new THREE.BoxGeometry(0.10 * scale, 0.18 * scale, 0.12 * scale), beltMat);
+            radio.position.set(-0.46 * scale, 0.72 * scale, 0);
+            group.add(radio);
+
+            const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.01 * scale, 0.01 * scale, 0.18 * scale, 6), beltMat);
+            antenna.position.set(-0.46 * scale, 0.88 * scale, 0);
+            group.add(antenna);
+
+            // Holster pouch on right hip
+            const holster = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 0.22 * scale, 0.14 * scale), beltMat);
+            holster.position.set(0.46 * scale, 0.68 * scale, 0);
+            group.add(holster);
+
+            // --- HEAD & POLICE BERET ---
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.42 * scale, 0.46 * scale, 0.40 * scale), skinMat);
+            head.position.y = 1.82 * scale;
+            head.castShadow = true;
+            group.add(head);
+
+            // Spectacles / Glasses (from reference photo)
+            const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.32 * scale, 0.08 * scale, 0.04 * scale), glassFrameMat);
+            glasses.position.set(0, 1.85 * scale, 0.21 * scale);
+            group.add(glasses);
+
+            // Dark Navy Wool Beret (Tilted sharply as in reference photo)
+            const beret = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * scale, 0.24 * scale, 0.16 * scale, 18), beretMat);
+            beret.position.set(0.06 * scale, 2.08 * scale, 0.02 * scale);
+            beret.rotation.z = -0.28;
+            group.add(beret);
+
+            // Silver Cap Badge / Emblem on beret
+            const capBadge = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.10 * scale, 0.03 * scale), silverMat);
+            capBadge.position.set(0.12 * scale, 2.06 * scale, 0.18 * scale);
+            capBadge.rotation.z = -0.28;
+            group.add(capBadge);
+
+            // --- LIMBS & ACTIVE PURSUIT SPRINT RIG ---
+            // Left Leg Group
+            const leftLegGroup = new THREE.Group();
+            leftLegGroup.position.set(-0.24 * scale, 0.68 * scale, 0);
+            const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.24 * scale, 0.72 * scale, 0.24 * scale), uniformMat);
+            leftLeg.position.y = -0.36 * scale;
+            leftLegGroup.add(leftLeg);
+            const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.26 * scale, 0.20 * scale, 0.38 * scale), bootMat);
+            leftBoot.position.set(0, -0.72 * scale, 0.06 * scale);
+            leftLegGroup.add(leftBoot);
+            group.add(leftLegGroup);
+
+            // Right Leg Group
+            const rightLegGroup = new THREE.Group();
+            rightLegGroup.position.set(0.24 * scale, 0.68 * scale, 0);
+            const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.24 * scale, 0.72 * scale, 0.24 * scale), uniformMat);
+            rightLeg.position.y = -0.36 * scale;
+            rightLegGroup.add(rightLeg);
+            const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.26 * scale, 0.20 * scale, 0.38 * scale), bootMat);
+            rightBoot.position.set(0, -0.72 * scale, 0.06 * scale);
+            rightLegGroup.add(rightBoot);
+            group.add(rightLegGroup);
+
+            // Left Arm Group
+            const leftArmGroup = new THREE.Group();
+            leftArmGroup.position.set(-0.52 * scale, 1.48 * scale, 0);
+            const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.22 * scale, 0.68 * scale, 0.22 * scale), uniformMat);
+            leftArm.position.y = -0.34 * scale;
+            leftArmGroup.add(leftArm);
+            const leftFist = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.18 * scale, 0.18 * scale), skinMat);
+            leftFist.position.y = -0.72 * scale;
+            leftArmGroup.add(leftFist);
+            group.add(leftArmGroup);
+
+            // Right Arm Group
+            const rightArmGroup = new THREE.Group();
+            rightArmGroup.position.set(0.52 * scale, 1.48 * scale, 0);
+            const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.22 * scale, 0.68 * scale, 0.22 * scale), uniformMat);
+            rightArm.position.y = -0.34 * scale;
+            rightArmGroup.add(rightArm);
+            const rightFist = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.18 * scale, 0.18 * scale), skinMat);
+            rightFist.position.y = -0.72 * scale;
+            rightArmGroup.add(rightFist);
+            group.add(rightArmGroup);
+
+            chaserMesh = group;
+            chaserMesh.userData = {
+                leftLegGroup, rightLegGroup,
+                leftArmGroup, rightArmGroup,
+                beaconRed, beaconBlue,
+                runCycle: 0
+            };
+            chaserMesh.position.set(0, 0, -CONFIG.normalChaserDist);
+            scene.add(chaserMesh);
+        }
+
+        
+        // =================================================================
+        // DHAKA 3D ENVIRONMENT & AUTHENTIC OBSTACLE MESH SYSTEM (PDF SPEC)
+        // =================================================================
+        
+        // 1. Cycle Rickshaw (Low-poly < 150 tris)
+        function createRickshawMesh(laneX, zOffset) {
+            const group = new THREE.Group();
+            group.position.set(laneX, 0, zOffset);
+
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 }); // Rickshaw Red
+            const hoodMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.7 });  // Yellow Canopy
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 }); // Black Rubber/Spokes
+            const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.8, roughness: 0.2 });
+
+            // Passenger Seat Box
+            const seatBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.9), frameMat);
+            seatBox.position.set(0, 0.45, 0);
+            group.add(seatBox);
+
+            // Folded Canopy Hood
+            const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 1.22, 8, 1, false, 0, Math.PI), hoodMat);
+            hood.rotation.z = Math.PI / 2;
+            hood.position.set(0, 0.95, -0.2);
+            group.add(hood);
+
+            // Rear Axle & Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12);
+            wheelGeo.rotateZ(Math.PI / 2);
+            const leftWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            leftWheel.position.set(-0.68, 0.42, 0.1);
+            group.add(leftWheel);
+
+            const rightWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            rightWheel.position.set(0.68, 0.42, 0.1);
+            group.add(rightWheel);
+
+            // Front Bicycle Frame & Handlebars
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), chromeMat);
+            stem.position.set(0, 0.55, 0.85);
+            group.add(stem);
+
+            const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.05), chromeMat);
+            handlebar.position.set(0, 0.92, 0.82);
+            group.add(handlebar);
+
+            const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            frontWheel.position.set(0, 0.42, 1.1);
+            group.add(frontWheel);
+
+            // Passenger Backrest
+            const backrest = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.6, 0.1), hoodMat);
+            backrest.position.set(0, 0.85, -0.4);
+            group.add(backrest);
+
+            return group;
+        }
+
+        // 2. CNG Auto Rickshaw (Green Three-Wheeler Taxi < 140 tris)
+        function createCNGMesh(laneX, zOffset) {
+            const group = new THREE.Group();
+            group.position.set(laneX, 0, zOffset);
+
+            const greenMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.45 }); // CNG Green (#15803d)
+            const yellowRoofMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.6 }); // Taxi Yellow
+            const blackBarsMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+            const glassMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.65 });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.85 });
+
+            // Lower Chassis
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.65, 1.8), greenMat);
+            chassis.position.set(0, 0.45, 0);
+            group.add(chassis);
+
+            // Yellow Roof Top
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.15, 1.7), yellowRoofMat);
+            roof.position.set(0, 1.45, 0);
+            group.add(roof);
+
+            // Side Safety Roll-cage Grille / Bars
+            const leftBar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.6), blackBarsMat);
+            leftBar.position.set(-0.62, 1.05, 0);
+            group.add(leftBar);
+
+            const rightBar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.6), blackBarsMat);
+            rightBar.position.set(0.62, 1.05, 0);
+            group.add(rightBar);
+
+            // Front Windshield
+            const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.6, 0.05), glassMat);
+            windshield.position.set(0, 1.05, 0.85);
+            group.add(windshield);
+
+            // Headlight
+            const light = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.08), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+            light.position.set(0, 0.55, 0.92);
+            group.add(light);
+
+            // 3 Small Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.12, 10);
+            wheelGeo.rotateZ(Math.PI / 2);
+
+            const rearL = new THREE.Mesh(wheelGeo, wheelMat);
+            rearL.position.set(-0.66, 0.26, -0.55);
+            group.add(rearL);
+
+            const rearR = new THREE.Mesh(wheelGeo, wheelMat);
+            rearR.position.set(0.66, 0.26, -0.55);
+            group.add(rearR);
+
+            const frontW = new THREE.Mesh(wheelGeo, wheelMat);
+            frontW.position.set(0, 0.26, 0.75);
+            group.add(frontW);
+
+            return group;
+        }
+
+        // 3. Dhaka Local Bus ("Murir Tin" Colorful Transit Bus < 170 tris)
+        function createBusMesh(laneX, zOffset) {
+            const group = new THREE.Group();
+            group.position.set(laneX, 0, zOffset);
+
+            const busBlueMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
+            const stripeYellowMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5 });
+            const windowDarkMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.7 });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+            const cargoMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.8 });
+
+            // Lower Bus Body
+            const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.8, 3.8), busBlueMat);
+            lowerBody.position.set(0, 0.65, 0);
+            group.add(lowerBody);
+
+            // Middle Yellow Identity Stripe
+            const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.2, 3.82), stripeYellowMat);
+            stripe.position.set(0, 1.1, 0);
+            group.add(stripe);
+
+            // Upper Window Band
+            const windowBand = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.6, 3.75), windowDarkMat);
+            windowBand.position.set(0, 1.48, 0);
+            group.add(windowBand);
+
+            // Roof Curved Slab
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.15, 3.85), roofMat);
+            roof.position.set(0, 1.85, 0);
+            group.add(roof);
+
+            // Roof Cargo & Luggage Bundles
+            const luggage = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 2.2), cargoMat);
+            luggage.position.set(0, 2.05, 0);
+            group.add(luggage);
+
+            // Heavy Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.2, 10);
+            wheelGeo.rotateZ(Math.PI / 2);
+
+            const wFL = new THREE.Mesh(wheelGeo, wheelMat);
+            wFL.position.set(-0.84, 0.36, 1.2);
+            group.add(wFL);
+
+            const wFR = new THREE.Mesh(wheelGeo, wheelMat);
+            wFR.position.set(0.84, 0.36, 1.2);
+            group.add(wFR);
+
+            const wRL = new THREE.Mesh(wheelGeo, wheelMat);
+            wRL.position.set(-0.84, 0.36, -1.2);
+            group.add(wRL);
+
+            const wRR = new THREE.Mesh(wheelGeo, wheelMat);
+            wRR.position.set(0.84, 0.36, -1.2);
+            group.add(wRR);
+
+            return group;
+        }
+
+        // 4. Street Market Stall / Chaa-Tong (Slide under or steer clear < 110 tris)
+        function createMarketStallMesh(laneX, zOffset) {
+            const group = new THREE.Group();
+            group.position.set(laneX, 0, zOffset);
+
+            const bambooMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 });
+            const tarpBlueMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.6 });
+            const crateMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.85 });
+            const fruitMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 });
+
+            // 4 Bamboo Uprights
+            const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.1, 6);
+            const p1 = new THREE.Mesh(poleGeo, bambooMat); p1.position.set(-0.8, 1.05, -0.6); group.add(p1);
+            const p2 = new THREE.Mesh(poleGeo, bambooMat); p2.position.set(0.8, 1.05, -0.6); group.add(p2);
+            const p3 = new THREE.Mesh(poleGeo, bambooMat); p3.position.set(-0.8, 0.95, 0.6); group.add(p3);
+            const p4 = new THREE.Mesh(poleGeo, bambooMat); p4.position.set(0.8, 0.95, 0.6); group.add(p4);
+
+            // Overhead Slanted Tarp Canopy (Height 1.95 - clearance for sliding under!)
+            const tarp = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.06, 1.55), tarpBlueMat);
+            tarp.position.set(0, 1.95, 0);
+            tarp.rotation.x = 0.12;
+            group.add(tarp);
+
+            // Table Plank
+            const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.9), crateMat);
+            table.position.set(0, 0.65, 0);
+            group.add(table);
+
+            // Vegetable/Tea Produce on Table
+            const produce = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.22, 0.7), fruitMat);
+            produce.position.set(0, 0.8, 0);
+            group.add(produce);
+
+            return group;
+        }
+
+        // 5. DMP Police Barricade & Pothole (Jump over < 100 tris)
+        function createDMPBarrierMesh(laneX, zOffset) {
+            const group = new THREE.Group();
+            group.position.set(laneX, 0, zOffset);
+
+            const dmpBlueMat = new THREE.MeshStandardMaterial({ color: 0x0d47a1, roughness: 0.4 }); // DMP Blue (#0D47A1)
+            const whiteStripeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+            const warningLightMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+            const potholeMat = new THREE.MeshBasicMaterial({ color: 0x09090b });
+
+            // Main Barricade Beam
+            const beam = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.8, 0.6, 0.15), dmpBlueMat);
+            beam.position.set(0, 0.6, 0);
+            group.add(beam);
+
+            // Reflective White Center Stripes
+            const stripe1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
+            stripe1.position.set(-1.0, 0.6, 0);
+            group.add(stripe1);
+
+            const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
+            stripe2.position.set(0, 0.6, 0);
+            group.add(stripe2);
+
+            const stripe3 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
+            stripe3.position.set(1.0, 0.6, 0);
+            group.add(stripe3);
+
+            // Support Legs (A-frame style)
+            const legGeo = new THREE.BoxGeometry(0.1, 0.7, 0.5);
+            const legL = new THREE.Mesh(legGeo, dmpBlueMat); legL.position.set(-1.8, 0.35, 0); group.add(legL);
+            const legR = new THREE.Mesh(legGeo, dmpBlueMat); legR.position.set(1.8, 0.35, 0); group.add(legR);
+
+            // Yellow Flasher Lamp
+            const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.16, 8), warningLightMat);
+            beacon.position.set(0, 1.0, 0);
+            group.add(beacon);
+
+            // Sunken Asphalt Pothole Cutout on Road
+            const pothole = new THREE.Mesh(new THREE.CircleGeometry(0.55, 10), potholeMat);
+            pothole.rotation.x = -Math.PI / 2;
+            pothole.position.set(0, 0.02, 0.7);
+            group.add(pothole);
+
+            return group;
+        }
+
+        // Procedural Path Assembly
+        function createSegment(type = 'STRAIGHT', angle = 0, origin = new THREE.Vector3(0,0,0)) {
+            const segment = new THREE.Group();
+            segment.userData = {
+                type: type,
+                angle: angle,
+                obstacles: [],
+                coins: [],
+                powerups: [],
+                turnTrigger: false,
+                cleared: false
+            };
+
+            const isDhaka = (STATE.selectedMapId === 'dhaka_city');
+            const roadMat = new THREE.MeshStandardMaterial({ 
+                color: isDhaka ? 0x2b2d2f : 0x334155, // Dhaka Asphalt (#2B2D2F) vs Sanctuary Flagstone
+                roughness: isDhaka ? 0.75 : 0.85 
+            });
+            const curbMat = new THREE.MeshStandardMaterial({ 
+                color: isDhaka ? 0xf59e0b : 0x64748b, // Dhaka Yellow Municipal Curb (#F59E0B)
+                roughness: 0.7 
+            });
+            const wallMat = new THREE.MeshStandardMaterial({ 
+                color: isDhaka ? 0xc87d65 : 0x1e293b, // Dhaka Red Brick Facade (#C87D65)
+                roughness: 0.9 
+            });
+
+            if (type === 'STRAIGHT') {
+                // Ground road
+                const road = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 3, 0.4, CONFIG.segmentLength), roadMat);
+                road.position.set(0, -0.2, CONFIG.segmentLength / 2);
+                road.receiveShadow = true;
+                segment.add(road);
+
+                // Curbs
+                const leftCurb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, CONFIG.segmentLength), curbMat);
+                leftCurb.position.set(-(CONFIG.laneWidth * 1.5 + 0.2), 0.2, CONFIG.segmentLength / 2);
+                segment.add(leftCurb);
+
+                const rightCurb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, CONFIG.segmentLength), curbMat);
+                rightCurb.position.set((CONFIG.laneWidth * 1.5 + 0.2), 0.2, CONFIG.segmentLength / 2);
+                segment.add(rightCurb);
+
+                // Populate items (if not the starting safe segments)
+                if (activeSegments.length > 2) {
+                    populateSegmentHazards(segment);
+                }
+            } else if (type === 'TURN_LEFT' || type === 'TURN_RIGHT') {
+                // Corner Junction platform
+                const junctionSize = CONFIG.laneWidth * 3 + 2;
+                const platform = new THREE.Mesh(new THREE.BoxGeometry(junctionSize, 0.4, junctionSize), roadMat);
+                platform.position.set(0, -0.2, junctionSize / 2);
+                segment.add(platform);
+
+                // Front cliff wall blocking straight continuation (forces 90° turn!)
+                const blockWall = new THREE.Mesh(new THREE.BoxGeometry(junctionSize, 3.0, 0.8), wallMat);
+                blockWall.position.set(0, 1.3, junctionSize);
+                segment.add(blockWall);
+
+                segment.userData.turnTrigger = true;
+                segment.userData.turnDirection = type === 'TURN_LEFT' ? -1 : 1;
+            }
+
+            segment.position.copy(origin);
+            segment.rotation.y = angle;
+            scene.add(segment);
+            return segment;
+        }
+
+        function populateSegmentHazards(segment) {
+            const zOffset = CONFIG.segmentLength * 0.55;
+            const laneRoll = [-1, 0, 1][Math.floor(Math.random() * 3)];
+            const isDhaka = (STATE.selectedMapId === 'dhaka_city');
+
+            if (isDhaka) {
+                // Authentic Dhaka 5-Obstacle Suite from PDF Specification
+                const dhakaRoll = Math.random();
+                if (dhakaRoll < 0.22) {
+                    // 1. Cycle Rickshaw (Lane blockade - Steer to avoid)
+                    const rickshaw = createRickshawMesh(laneRoll * CONFIG.laneWidth, zOffset);
+                    segment.add(rickshaw);
+                    segment.userData.obstacles.push({
+                        mesh: rickshaw,
+                        type: 'PILLAR',
+                        localZ: zOffset,
+                        lane: laneRoll
+                    });
+                } else if (dhakaRoll < 0.44) {
+                    // 2. CNG Auto Rickshaw (Lane blockade - Steer to avoid)
+                    const cng = createCNGMesh(laneRoll * CONFIG.laneWidth, zOffset);
+                    segment.add(cng);
+                    segment.userData.obstacles.push({
+                        mesh: cng,
+                        type: 'PILLAR',
+                        localZ: zOffset,
+                        lane: laneRoll
+                    });
+                } else if (dhakaRoll < 0.66) {
+                    // 3. DMP Police Barricade & Pothole (Jump over!)
+                    const dmp = createDMPBarrierMesh(0, zOffset);
+                    segment.add(dmp);
+                    segment.userData.obstacles.push({
+                        mesh: dmp,
+                        type: 'LOW_BARRIER',
+                        localZ: zOffset,
+                        lane: 99 // requires jump
+                    });
+                } else if (dhakaRoll < 0.84) {
+                    // 4. Street Market Stall / Chaa Tong (Slide under canopy or steer!)
+                    const stall = createMarketStallMesh(laneRoll * CONFIG.laneWidth, zOffset);
+                    segment.add(stall);
+                    segment.userData.obstacles.push({
+                        mesh: stall,
+                        type: 'HIGH_ARCH',
+                        localZ: zOffset,
+                        lane: laneRoll // allows slide under
+                    });
+                } else {
+                    // 5. Dhaka Local Bus ("Murir Tin" - Heavy lane blockage)
+                    const bus = createBusMesh(laneRoll * CONFIG.laneWidth, zOffset);
+                    segment.add(bus);
+                    segment.userData.obstacles.push({
+                        mesh: bus,
+                        type: 'PILLAR',
+                        localZ: zOffset,
+                        lane: laneRoll
+                    });
+                }
+            } else {
+                // Ancient Sanctuary Theme Obstacles
+                const roll = Math.random();
+                if (roll < 0.35) {
+                    // Low stone barrier (Jump over)
+                    const barMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
+                    const barrier = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.8, 0.7, 0.5), barMat);
+                    barrier.position.set(0, 0.35, zOffset);
+                    segment.add(barrier);
+                    segment.userData.obstacles.push({
+                        mesh: barrier,
+                        type: 'LOW_BARRIER',
+                        localZ: zOffset,
+                        lane: 99 // covers all lanes, requires jump
+                    });
+                } else if (roll < 0.65) {
+                    // High Stone Arch / Spiked Log (Slide under)
+                    const archMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.7 });
+                    const beam = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.9, 0.9, 0.6), archMat);
+                    beam.position.set(0, 1.45, zOffset);
+                    segment.add(beam);
+                    segment.userData.obstacles.push({
+                        mesh: beam,
+                        type: 'HIGH_ARCH',
+                        localZ: zOffset,
+                        lane: 99 // requires slide
+                    });
+                } else {
+                    // Side Basalt Pillar (Lane switch)
+                    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
+                    const pillar = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 0.9, 2.5, 0.9), pillarMat);
+                    pillar.position.set(laneRoll * CONFIG.laneWidth, 1.25, zOffset);
+                    segment.add(pillar);
+                    segment.userData.obstacles.push({
+                        mesh: pillar,
+                        type: 'PILLAR',
+                        localZ: zOffset,
+                        lane: laneRoll
+                    });
+                }
+            }
+
+            // Spawn Coins
+            const coinMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.8, roughness: 0.2 });
+            const coinGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.08, 12);
+            coinGeo.rotateX(Math.PI / 2);
+
+            const coinLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+            for (let c = 0; c < 4; c++) {
+                const coin = new THREE.Mesh(coinGeo, coinMat);
+                const cz = 4 + c * 3.2;
+                coin.position.set(coinLane * CONFIG.laneWidth, 0.7, cz);
+                segment.add(coin);
+                segment.userData.coins.push({
+                    mesh: coin,
+                    collected: false,
+                    lane: coinLane,
+                    localZ: cz
+                });
+            }
+
+            // Power-up chance (12%)
+            if (Math.random() < 0.12) {
+                const puTypes = ['SHIELD', 'MAGNET'];
+                const puType = puTypes[Math.floor(Math.random() * puTypes.length)];
+                const puMat = new THREE.MeshBasicMaterial({ color: puType === 'SHIELD' ? 0x38bdf8 : 0xec4899 });
+                const puMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4), puMat);
+                puMesh.position.set(0, 1.0, CONFIG.segmentLength * 0.8);
+                segment.add(puMesh);
+                segment.userData.powerups.push({
+                    mesh: puMesh,
+                    type: puType,
+                    collected: false
+                });
+            }
+        }
+
+        function generateNextSegment() {
+            segmentsUntilTurn--;
+
+            let type = 'STRAIGHT';
+            if (segmentsUntilTurn <= 0) {
+                type = Math.random() < 0.5 ? 'TURN_LEFT' : 'TURN_RIGHT';
+                segmentsUntilTurn = Math.floor(Math.random() * 5) + 7;
+            }
+
+            const seg = createSegment(type, currentAngle, currentAttachPos);
+            activeSegments.push(seg);
+
+            if (type === 'STRAIGHT') {
+                const offset = currentForward.clone().multiplyScalar(CONFIG.segmentLength);
+                currentAttachPos.add(offset);
+            } else if (type === 'TURN_LEFT') {
+                const junctionSize = CONFIG.laneWidth * 3 + 2;
+                currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
+                currentAngle += Math.PI / 2;
+                currentForward.set(Math.sin(currentAngle), 0, Math.cos(currentAngle));
+                currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
+            } else if (type === 'TURN_RIGHT') {
+                const junctionSize = CONFIG.laneWidth * 3 + 2;
+                currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
+                currentAngle -= Math.PI / 2;
+                currentForward.set(Math.sin(currentAngle), 0, Math.cos(currentAngle));
+                currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
+            }
+        }
+
+        function resetRun() {
+            // Clear existing segments
+            while (activeSegments.length > 0) {
+                const seg = activeSegments.pop();
+                scene.remove(seg);
+            }
+
+            currentAttachPos.set(0, 0, 0);
+            currentForward.set(0, 0, 1);
+            currentAngle = 0;
+            segmentsUntilTurn = 8;
+            nextTurnType = null;
+            turnOpportunity = false;
+
+            // Reset player states
+            STATE.score = 0;
+            STATE.distance = 0;
+            STATE.coins = 0;
+            STATE.powerMeterCharge = 0;
+            STATE.powerMeterReady = false;
+            updatePowerMeterUI();
+            STATE.speed = CONFIG.baseSpeed;
+            STATE.currentLane = 0;
+            STATE.targetLaneX = 0;
+            STATE.playerY = 0;
+            STATE.vertVelocity = 0;
+            STATE.isJumping = false;
+            STATE.isSliding = false;
+            STATE.isStumbling = false;
+            STATE.shieldActive = false;
+            STATE.magnetActive = false;
+            STATE.chaserDistance = CONFIG.normalChaserDist;
+            STATE.targetChaserDist = CONFIG.normalChaserDist;
+            STATE.cleanRunTimer = 5.0;
+
+            playerMesh.position.set(0, 0, 0);
+            playerMesh.rotation.set(0, 0, 0);
+            chaserMesh.position.set(0, 0, -CONFIG.normalChaserDist);
+            chaserMesh.rotation.set(0, 0, 0);
+            shieldMesh.visible = false;
+
+            document.getElementById('turn-indicator').style.display = 'none';
+            document.getElementById('danger-vignette').classList.remove('active');
+
+            // Spawn initial segments
+            for (let i = 0; i < CONFIG.initialSegments; i++) {
+                generateNextSegment();
+            }
+
+            updateHUD();
+        }
+
+        // Input Handling: Swipe + Keyboard
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        function setupInputs() {
+            window.addEventListener('keydown', (e) => {
+                if (STATE.mode !== 'RUNNING') return;
+
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                    handleAction('LEFT');
+                } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                    handleAction('RIGHT');
+                } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                    handleAction('UP');
+                } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                    handleAction('DOWN');
+                } else if (e.code === 'Space') {
+                    if (STATE.powerMeterReady) {
+                        tryActivateChargedPowerUp();
+                    } else {
+                        handleAction('UP');
+                    }
+                } else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+                    togglePause();
+                }
+            });
+
+            // Touch / Mouse Swipe
+            window.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 0) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchend', (e) => {
+                if (STATE.mode !== 'RUNNING') return;
+                if (e.changedTouches.length > 0) {
+                    const dx = e.changedTouches[0].clientX - touchStartX;
+                    const dy = e.changedTouches[0].clientY - touchStartY;
+                    processSwipe(dx, dy);
+                }
+            }, { passive: true });
+
+            // Mouse Drag as Touch fallback
+            let mouseDownX = 0, mouseDownY = 0, isMouseDown = false;
+            let lastTapTime = 0;
+
+            window.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                mouseDownX = e.clientX;
+                mouseDownY = e.clientY;
+
+                // Double tap / click detection for Poki Temple Run 2 powerup trigger
+                const now = performance.now();
+                if (now - lastTapTime < 320 && STATE.mode === 'RUNNING') {
+                    tryActivateChargedPowerUp();
+                }
+                lastTapTime = now;
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (!isMouseDown || STATE.mode !== 'RUNNING') return;
+                isMouseDown = false;
+                const dx = e.clientX - mouseDownX;
+                const dy = e.clientY - mouseDownY;
+                processSwipe(dx, dy);
+            });
+
+            const meterBtn = document.getElementById('powerup-gauge-container');
+            if (meterBtn) {
+                meterBtn.addEventListener('click', () => {
+                    if (STATE.mode === 'RUNNING') tryActivateChargedPowerUp();
+                });
+            }
+        }
+
+        function processSwipe(dx, dy) {
+            const dist = Math.hypot(dx, dy);
+            if (dist < 30) return;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                handleAction(dx > 0 ? 'RIGHT' : 'LEFT');
+            } else {
+                handleAction(dy > 0 ? 'DOWN' : 'UP');
+            }
+        }
+
+        function handleAction(action) {
+            audio.init();
+
+            if (action === 'LEFT') {
+                if (turnOpportunity && nextTurnType === 'TURN_LEFT') {
+                    executeTurn(Math.PI / 2);
+                } else {
+                    changeLane(-1);
+                }
+            } else if (action === 'RIGHT') {
+                if (turnOpportunity && nextTurnType === 'TURN_RIGHT') {
+                    executeTurn(-Math.PI / 2);
+                } else {
+                    changeLane(1);
+                }
+            } else if (action === 'UP') {
+                executeJump();
+            } else if (action === 'DOWN') {
+                executeSlide();
+            }
+        }
+
+        function changeLane(dir) {
+            const target = Math.max(-1, Math.min(1, STATE.currentLane + dir));
+            if (target !== STATE.currentLane) {
+                STATE.currentLane = target;
+                STATE.targetLaneX = STATE.currentLane * CONFIG.laneWidth;
+                audio.playSlide();
+            }
+        }
+
+        function executeJump() {
+            if (!STATE.isJumping) {
+                STATE.isJumping = true;
+                STATE.isSliding = false;
+                STATE.vertVelocity = CONFIG.jumpForce;
+                audio.playJump();
+            }
+        }
+
+        function executeSlide() {
+            // Fast dive if mid-air
+            if (STATE.isJumping) {
+                STATE.vertVelocity = -CONFIG.jumpForce * 1.5;
+            }
+            STATE.isSliding = true;
+            STATE.slideTimer = CONFIG.slideDuration;
+            playerMesh.scale.set(1, 0.45, 1);
+            audio.playSlide();
+        }
+
+        function executeTurn(angleDelta) {
+            turnOpportunity = false;
+            document.getElementById('turn-indicator').style.display = 'none';
+            playerMesh.rotation.y += angleDelta;
+            STATE.currentLane = 0;
+            STATE.targetLaneX = 0;
+            audio.playTurn();
+        }
+
+        function triggerStumble() {
+            if (STATE.shieldActive) {
+                STATE.shieldActive = false;
+                shieldMesh.visible = false;
+                audio.playCoin();
+                return;
+            }
+
+            if (STATE.isStumbling) {
+                // Second stumble while guardian is close is FATAL!
+                triggerGameOver("Apprehended by Cop Daddy after second stumble!");
+                return;
+            }
+
+            STATE.isStumbling = true;
+            STATE.stumbleTimer = CONFIG.stumbleDuration;
+            STATE.targetChaserDist = CONFIG.dangerChaserDist;
+            STATE.cleanRunTimer = 0;
+            STATE.screenShake = 0.45;
+            audio.playStumble();
+            document.getElementById('danger-vignette').classList.add('active');
+        }
+
+        function triggerGameOver(reason = "Crashed into barrier!") {
+            STATE.mode = 'GAMEOVER';
+            audio.playDeath();
+
+            document.getElementById('death-reason').innerText = reason;
+            document.getElementById('final-score').innerText = Math.floor(STATE.score).toLocaleString();
+            document.getElementById('final-dist').innerText = `${Math.floor(STATE.distance)} m`;
+            document.getElementById('final-coins').innerText = `+${STATE.coins}`;
+
+            const isNewBest = STATE.score > STATE.highScore;
+            if (isNewBest) {
+                STATE.highScore = Math.floor(STATE.score);
+                localStorage.setItem('copdaddy_highscore', STATE.highScore);
+                localStorage.setItem('chrono_highscore', STATE.highScore); // legacy compat
+            }
+            STATE.totalCoins += STATE.coins;
+            localStorage.setItem('copdaddy_totalcoins', STATE.totalCoins);
+            localStorage.setItem('chrono_totalcoins', STATE.totalCoins); // legacy compat
+
+            document.getElementById('best-score').innerHTML = `${STATE.highScore.toLocaleString()} ${isNewBest ? '<span class="badge-new">NEW BEST!</span>' : ''}`;
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('gameover-screen').classList.add('active');
+        }
+
+        // Main Simulation Loop
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const dt = Math.min((now - lastTime) / 1000, 0.08);
+            lastTime = now;
+
+            if (STATE.mode === 'RUNNING') {
+                updateGameplay(dt);
+            }
+
+            // Always render scene
+            renderer.render(scene, camera);
+        }
+
+        function updateGameplay(dt) {
+            // Speed progression
+            STATE.speed = Math.min(STATE.speed + CONFIG.accel * dt, CONFIG.maxSpeed);
+            let activeSpeed = STATE.speed;
+            if (STATE.isStumbling) activeSpeed *= 0.6;
+
+            const moveDist = activeSpeed * dt;
+            STATE.distance += moveDist;
+            STATE.score += moveDist * 10 + (STATE.coins * 2);
+
+            // Clean run recovery for Chaser
+            STATE.cleanRunTimer += dt;
+            if (STATE.cleanRunTimer > 4.5) {
+                STATE.targetChaserDist = CONFIG.normalChaserDist;
+                document.getElementById('danger-vignette').classList.remove('active');
+            }
+
+            // Keep distant background cylinder centered on runner
+            if (scene.userData && scene.userData.bgMesh) {
+                scene.userData.bgMesh.position.x = playerMesh.position.x;
+                scene.userData.bgMesh.position.z = playerMesh.position.z;
+            }
+
+            // Move player forward in current heading
+            const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerMesh.rotation.y);
+            playerMesh.position.add(forward.clone().multiplyScalar(moveDist));
+
+            // Animate Dr. Araf athletic running cadence
+            if (playerMesh.userData && playerMesh.userData.leftLegGroup) {
+                const u = playerMesh.userData;
+                if (!STATE.isJumping && !STATE.isSliding) {
+                    u.runCycle += dt * activeSpeed * 0.9;
+                    const legAngle = Math.sin(u.runCycle) * 0.65;
+                    const armAngle = -Math.sin(u.runCycle) * 0.65;
+                    u.leftLegGroup.rotation.x = legAngle;
+                    u.rightLegGroup.rotation.x = -legAngle;
+                    u.leftArmGroup.rotation.x = armAngle;
+                    u.rightArmGroup.rotation.x = -armAngle;
+                } else if (STATE.isJumping) {
+                    u.leftLegGroup.rotation.x = -0.4;
+                    u.rightLegGroup.rotation.x = 0.5;
+                    u.leftArmGroup.rotation.x = 1.0;
+                    u.rightArmGroup.rotation.x = 1.0;
+                } else if (STATE.isSliding) {
+                    u.leftLegGroup.rotation.x = 1.2;
+                    u.rightLegGroup.rotation.x = 1.2;
+                    u.leftArmGroup.rotation.x = -0.8;
+                    u.rightArmGroup.rotation.x = -0.8;
+                }
+            }
+
+            // Smooth Lane Transition & Tilt Lean (Poki Temple Run 2 style)
+            const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerMesh.rotation.y);
+            const currentLocalX = (STATE.currentLane * CONFIG.laneWidth);
+            const targetLean = (STATE.targetLaneX - currentLocalX) * 0.05;
+            playerMesh.rotation.z = THREE.MathUtils.lerp(playerMesh.rotation.z, targetLean, dt * 10);
+            // Jump / Gravity Physics
+            if (STATE.isJumping) {
+                STATE.vertVelocity -= CONFIG.gravity * dt;
+                STATE.playerY += STATE.vertVelocity * dt;
+                if (STATE.playerY <= 0) {
+                    STATE.playerY = 0;
+                    STATE.isJumping = false;
+                    STATE.vertVelocity = 0;
+                }
+            }
+            playerMesh.position.y = STATE.playerY;
+
+            // Slide duration recovery
+            if (STATE.isSliding) {
+                STATE.slideTimer -= dt;
+                if (STATE.slideTimer <= 0) {
+                    STATE.isSliding = false;
+                    playerMesh.scale.set(1, 1, 1);
+                }
+            }
+
+            // Stumble recovery
+            if (STATE.isStumbling) {
+                STATE.stumbleTimer -= dt;
+                if (STATE.stumbleTimer <= 0) {
+                    STATE.isStumbling = false;
+                }
+            }
+
+            // Power-up magnet timer
+            if (STATE.magnetActive) {
+                STATE.magnetTimer -= dt;
+                const ratio = Math.max(0, STATE.magnetTimer / 10.0);
+                const fillEl = document.getElementById('meter-fill');
+                if (fillEl) fillEl.style.height = `${ratio * 100}%`;
+                if (STATE.magnetTimer <= 0) {
+                    STATE.magnetActive = false;
+                    if (fillEl) fillEl.style.height = '0%';
+                }
+            }
+
+            // Cop Daddy police pursuer follow behavior & heavy pursuit stride
+            STATE.chaserDistance = THREE.MathUtils.lerp(STATE.chaserDistance, STATE.targetChaserDist, dt * 3.5);
+            const chaserTarget = playerMesh.position.clone().sub(forward.clone().multiplyScalar(STATE.chaserDistance));
+            chaserMesh.position.lerp(chaserTarget, dt * 12);
+            chaserMesh.rotation.y = playerMesh.rotation.y;
+
+            // Animate Cop Daddy aggressive pursuit cadence
+            if (chaserMesh && chaserMesh.userData && chaserMesh.userData.leftLegGroup) {
+                const cu = chaserMesh.userData;
+                const chaseRunSpeed = activeSpeed * 1.05;
+                cu.runCycle = (cu.runCycle || 0) + dt * chaseRunSpeed * 0.95;
+                const chaserLegAngle = Math.sin(cu.runCycle) * 0.72;
+                const chaserArmAngle = -Math.sin(cu.runCycle) * 0.72;
+                cu.leftLegGroup.rotation.x = chaserLegAngle;
+                cu.rightLegGroup.rotation.x = -chaserLegAngle;
+                cu.leftArmGroup.rotation.x = chaserArmAngle;
+                cu.rightArmGroup.rotation.x = -chaserArmAngle;
+
+                // Strobe emergency shoulder lights when in danger range
+                const inDanger = (STATE.targetChaserDist <= CONFIG.dangerChaserDist + 0.5);
+                if (inDanger && cu.beaconRed && cu.beaconBlue) {
+                    const strobe = Math.sin(performance.now() * 0.02) > 0;
+                    cu.beaconRed.visible = strobe;
+                    cu.beaconBlue.visible = !strobe;
+                } else if (cu.beaconRed) {
+                    cu.beaconRed.visible = false;
+                    cu.beaconBlue.visible = false;
+                }
+            }
+
+            // Camera follow behind player (Aligned with visual reference perspective)
+            const camOffset = forward.clone().multiplyScalar(-5.2).add(new THREE.Vector3(0, 3.4, 0));
+            const targetCamPos = playerMesh.position.clone().add(camOffset);
+
+            // Screen shake
+            if (STATE.screenShake > 0 && STATE.cameraEffects) {
+                targetCamPos.x += (Math.random() - 0.5) * STATE.screenShake;
+                targetCamPos.y += (Math.random() - 0.5) * STATE.screenShake;
+                STATE.screenShake = Math.max(0, STATE.screenShake - dt * 1.5);
+            }
+
+            camera.position.lerp(targetCamPos, dt * 10);
+            const lookTarget = playerMesh.position.clone().add(new THREE.Vector3(0, 1.35, 0)).add(forward.clone().multiplyScalar(2.0));
+            camera.lookAt(lookTarget);
+
+            // Check segments & collisions
+            checkSegmentInteractions();
+
+            // Recycle past segments & spawn new ones
+            if (activeSegments.length > 0) {
+                const oldest = activeSegments[0];
+                const toOldest = oldest.position.clone().sub(playerMesh.position);
+                if (toOldest.length() > 45 && forward.dot(toOldest) < -15) {
+                    const removed = activeSegments.shift();
+                    scene.remove(removed);
+                    generateNextSegment();
+                }
+            }
+
+            updateHUD();
+        }
+
+        function checkSegmentInteractions() {
+            turnOpportunity = false;
+
+            for (const seg of activeSegments) {
+                // Check if segment is turn junction
+                if (seg.userData.turnTrigger) {
+                    const distToJunction = seg.position.distanceTo(playerMesh.position);
+                    if (distToJunction < 12.0) {
+                        turnOpportunity = true;
+                        nextTurnType = seg.userData.type;
+                        document.getElementById('turn-indicator').style.display = 'block';
+
+                        // If player runs straight through junction without turning, fatal cliff drop!
+                        if (distToJunction < 1.5) {
+                            triggerGameOver("Missed the junction turn! Cop Daddy sealed the perimeter!");
+                            return;
+                        }
+                    }
+                }
+
+                // Check Obstacles
+                for (const obs of seg.userData.obstacles) {
+                    const worldObsPos = new THREE.Vector3();
+                    obs.mesh.getWorldPosition(worldObsPos);
+                    const dist = worldObsPos.distanceTo(playerMesh.position);
+
+                    if (dist < 1.4) {
+                        // Check avoidance type
+                        if (obs.type === 'LOW_BARRIER') {
+                            if (!STATE.isJumping || STATE.playerY < 0.6) {
+                                triggerStumble();
+                                obs.mesh.visible = false;
+                            }
+                        } else if (obs.type === 'HIGH_ARCH') {
+                            if (!STATE.isSliding) {
+                                triggerStumble();
+                                obs.mesh.visible = false;
+                            }
+                        } else if (obs.type === 'PILLAR') {
+                            // Hit pillar
+                            triggerGameOver("Fatal collision with stone pillar!");
+                            return;
+                        }
+                    }
+                }
+
+                // Check Coins
+                for (const c of seg.userData.coins) {
+                    if (c.collected) continue;
+                    const worldCoinPos = new THREE.Vector3();
+                    c.mesh.getWorldPosition(worldCoinPos);
+
+                    // Magnet attraction
+                    if (STATE.magnetActive) {
+                        const distToCoin = worldCoinPos.distanceTo(playerMesh.position);
+                        if (distToCoin < 14) {
+                            c.mesh.position.lerp(seg.worldToLocal(playerMesh.position.clone().add(new THREE.Vector3(0, 1, 0))), 0.15);
+                        }
+                    }
+
+                    if (worldCoinPos.distanceTo(playerMesh.position) < 1.3) {
+                        c.collected = true;
+                        c.mesh.visible = false;
+                        STATE.coins++;
+                        audio.playCoin();
+
+                        // Charge power-up meter (Temple Run 2 Poki mechanic)
+                        if (!STATE.shieldActive && !STATE.magnetActive) {
+                            STATE.powerMeterCharge = Math.min(100, STATE.powerMeterCharge + 4);
+                            if (STATE.powerMeterCharge >= 100) {
+                                STATE.powerMeterReady = true;
+                            }
+                            updatePowerMeterUI();
+                        }
+                    }
+                }
+
+                // Check Power-ups
+                for (const pu of seg.userData.powerups) {
+                    if (pu.collected) continue;
+                    const worldPos = new THREE.Vector3();
+                    pu.mesh.getWorldPosition(worldPos);
+
+                    if (worldPos.distanceTo(playerMesh.position) < 1.4) {
+                        pu.collected = true;
+                        pu.mesh.visible = false;
+                        activatePowerUp(pu.type);
+                    }
+                }
+            }
+
+            if (!turnOpportunity) {
+                document.getElementById('turn-indicator').style.display = 'none';
+            }
+        }
+
+        function updatePowerMeterUI() {
+            const fillEl = document.getElementById('meter-fill');
+            const capsuleEl = document.getElementById('meter-capsule');
+            const hintEl = document.getElementById('meter-hint');
+            
+            if (fillEl) {
+                fillEl.style.height = `${STATE.powerMeterCharge}%`;
+            }
+            if (capsuleEl) {
+                if (STATE.powerMeterReady) {
+                    capsuleEl.classList.add('ready');
+                } else {
+                    capsuleEl.classList.remove('ready');
+                }
+            }
+            if (hintEl) {
+                hintEl.style.display = STATE.powerMeterReady ? 'block' : 'none';
+            }
+        }
+
+        function tryActivateChargedPowerUp() {
+            if (!STATE.powerMeterReady) return;
+            STATE.powerMeterReady = false;
+            STATE.powerMeterCharge = 0;
+            updatePowerMeterUI();
+
+            // Randomly grant Shield or Magnet Boost on activation
+            const chosen = Math.random() > 0.5 ? 'SHIELD' : 'MAGNET';
+            activatePowerUp(chosen);
+        }
+
+        function activatePowerUp(type) {
+            audio.playCoin();
+            const fillEl = document.getElementById('meter-fill');
+            if (fillEl) fillEl.style.height = '100%';
+
+            if (type === 'SHIELD') {
+                STATE.shieldActive = true;
+                shieldMesh.visible = true;
+            } else if (type === 'MAGNET') {
+                STATE.magnetActive = true;
+                STATE.magnetTimer = 10.0;
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-score').innerText = Math.floor(STATE.score).toLocaleString();
+            document.getElementById('hud-distance').innerText = `${Math.floor(STATE.distance)} m`;
+            document.getElementById('hud-coins').innerText = STATE.coins.toString();
+
+            // Missions progress fill
+            const coinFill = Math.min(100, (STATE.coins / 50) * 100);
+            const distFill = Math.min(100, (STATE.distance / 500) * 100);
+            const cfEl = document.getElementById('mission-coins-fill');
+            const dfEl = document.getElementById('mission-dist-fill');
+            if (cfEl) cfEl.style.width = `${coinFill}%`;
+            if (dfEl) dfEl.style.width = `${distFill}%`;
+        }
+
+        function togglePause() {
+            if (STATE.mode === 'RUNNING') {
+                STATE.mode = 'PAUSED';
+                document.getElementById('pause-screen').classList.add('active');
+            } else if (STATE.mode === 'PAUSED') {
+                STATE.mode = 'RUNNING';
+                document.getElementById('pause-screen').classList.remove('active');
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Screen Navigation Handlers
+        document.getElementById('btn-start').addEventListener('click', () => {
+            audio.init();
+            document.getElementById('menu-screen').classList.remove('active');
+            document.getElementById('hud').style.display = 'flex';
+            resetRun();
+            STATE.mode = 'RUNNING';
+        });
+
+        document.getElementById('btn-pause').addEventListener('click', togglePause);
+        document.getElementById('btn-resume').addEventListener('click', togglePause);
+
+        document.getElementById('btn-pause-restart').addEventListener('click', () => {
+            document.getElementById('pause-screen').classList.remove('active');
+            resetRun();
+            STATE.mode = 'RUNNING';
+        });
+
+        document.getElementById('btn-pause-menu').addEventListener('click', () => {
+            document.getElementById('pause-screen').classList.remove('active');
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('menu-screen').classList.add('active');
+            STATE.mode = 'MENU';
+        });
+
+        document.getElementById('btn-gameover-restart').addEventListener('click', () => {
+            document.getElementById('gameover-screen').classList.remove('active');
+            document.getElementById('hud').style.display = 'flex';
+            resetRun();
+            STATE.mode = 'RUNNING';
+        });
+
+        document.getElementById('btn-gameover-menu').addEventListener('click', () => {
+            document.getElementById('gameover-screen').classList.remove('active');
+            document.getElementById('menu-screen').classList.add('active');
+            STATE.mode = 'MENU';
+        });
+
+        // Modals
+        function setupModal(openBtnId, modalId, closeBtnId) {
+            document.getElementById(openBtnId).addEventListener('click', () => {
+                document.getElementById('menu-screen').classList.remove('active');
+                document.getElementById(modalId).classList.add('active');
+            });
+            document.getElementById(closeBtnId).addEventListener('click', () => {
+                document.getElementById(modalId).classList.remove('active');
+                document.getElementById('menu-screen').classList.add('active');
+            });
+        }
+
+        setupModal('btn-characters', 'character-screen', 'btn-char-back');
+        setupModal('btn-maps', 'map-screen', 'btn-map-back');
+        setupModal('btn-missions', 'missions-screen', 'btn-missions-back');
+        setupModal('btn-settings', 'settings-screen', 'btn-settings-back');
+
+                // Character Roster toggle with official user photo skins
+        const characters = [
+            { 
+                id: "cop_daddy", 
+                name: "Cop Daddy (Commander Habib)", 
+                perk: "Command Authority: Police Siren Shockwave & Stumble Armor", 
+                desc: "Faithfully modeled after the police reference photo. Features navy uniform, tilted beret with silver crest, rimless glasses, collar gorget patches, and tactical radio.",
+                img: BASE_PATH + "assets/cop_daddy_icon.png",
+                skin: "police"
+            },
+            { 
+                id: "dr_araf_suit", 
+                name: "Dr. Araf (Executive Suit)", 
+                perk: "+25% Score Multiplier & Rapid Recovery", 
+                desc: "Dr. Araf in his tailored black executive suit from IMG_6570. Features sharp formal styling and enhanced analytical recovery.",
+                img: BASE_PATH + "assets/dr_araf_icon.png",
+                skin: "suit"
+            },
+            { 
+                id: "dr_araf_casual", 
+                name: "Dr. Araf (Rooftop Casual)", 
+                perk: "+20% Run Speed & Extended Magnet Range", 
+                desc: "Dr. Araf in his rooftop casual navy t-shirt from IMG_6571. Lightweight and optimized for high-speed parkour sprinting.",
+                img: BASE_PATH + "assets/dr_araf_casual_icon.png",
+                skin: "casual"
+            }
+        ];
+        let charIdx = 0;
+        function updateCharCard() {
+            const c = characters[charIdx];
+            document.getElementById('char-name').innerText = c.name;
+            document.getElementById('char-perk').innerText = `Perk: ${c.perk}`;
+            document.getElementById('char-desc').innerText = c.desc;
+            const imgEl = document.getElementById('char-img');
+            if (imgEl && c.img) imgEl.src = c.img;
+            
+            const equipBtn = document.getElementById('btn-char-select');
+            if (equipBtn) {
+                equipBtn.innerText = (STATE.selectedChar === c.name) ? "EQUIPPED" : "EQUIP";
+            }
+        }
+        document.getElementById('btn-char-prev').addEventListener('click', () => { charIdx = (charIdx - 1 + characters.length) % characters.length; updateCharCard(); });
+        document.getElementById('btn-char-next').addEventListener('click', () => { charIdx = (charIdx + 1) % characters.length; updateCharCard(); });
+        document.getElementById('btn-char-select').addEventListener('click', () => {
+            const c = characters[charIdx];
+            STATE.selectedChar = c.name;
+            STATE.selectedSkin = c.skin;
+            buildPlayer(c.skin);
+            updateCharCard();
+        });
+
+        
+        // Map Selection Carousel (Dhaka City vs Ancient Sanctuary)
+        const maps = [
+            {
+                id: "dhaka_city",
+                name: "Dhaka City (Metropolitan Corridor)",
+                diff: "Difficulty: 1.2x (Urban Traffic)",
+                desc: "Authentic Dhaka streets featuring Cycle Rickshaws, CNGs, Local Buses, Market Stalls, and DMP Police Barricades with asphalt roads and yellow curbs."
+            },
+            {
+                id: "ancient_sanctuary",
+                name: "Ancient Sanctuary",
+                diff: "Difficulty: 1.0x (Standard)",
+                desc: "Mossy temple ruins with winding stone paths, basalt pillars, and ancient archways."
+            }
+        ];
+        let mapIdx = (localStorage.getItem('copdaddy_map_id') === 'ancient_sanctuary') ? 1 : 0;
+
+        function updateMapCard() {
+            const m = maps[mapIdx];
+            document.getElementById('map-name').innerText = m.name;
+            document.getElementById('map-diff').innerText = m.diff;
+            document.getElementById('map-desc').innerText = m.desc;
+
+            const selectBtn = document.getElementById('btn-map-select');
+            if (selectBtn) {
+                const isSelected = (STATE.selectedMapId === m.id);
+                selectBtn.innerText = isSelected ? "SELECTED" : "SELECT";
+                selectBtn.style.background = isSelected ? "#10b981" : "";
+            }
+        }
+
+        document.getElementById('btn-map-prev').addEventListener('click', () => {
+            mapIdx = (mapIdx - 1 + maps.length) % maps.length;
+            updateMapCard();
+        });
+
+        document.getElementById('btn-map-next').addEventListener('click', () => {
+            mapIdx = (mapIdx + 1) % maps.length;
+            updateMapCard();
+        });
+
+        document.getElementById('btn-map-select').addEventListener('click', () => {
+            const m = maps[mapIdx];
+            STATE.selectedMap = m.name;
+            STATE.selectedMapId = m.id;
+            localStorage.setItem('copdaddy_map', m.name);
+            localStorage.setItem('copdaddy_map_id', m.id);
+            updateMapCard();
+        });
+
+        // Initialize Map Card
+        updateMapCard();
+
+        // Settings toggles
+        document.getElementById('toggle-audio').addEventListener('change', (e) => {
+            audio.enabled = e.target.checked;
+        });
+        document.getElementById('toggle-shake').addEventListener('change', (e) => {
+            STATE.cameraEffects = e.target.checked;
+        });
+
+        
+        // Central Connectivity Monitor (Zero per-frame allocations)
+        function updateOfflineStatus() {
+            const badge = document.getElementById('offline-badge');
+            if (badge) {
+                if (navigator.onLine) {
+                    badge.innerHTML = '<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span> 100% OFFLINE PLAYABLE — ZERO NETWORK REQUIRED';
+                    badge.style.borderColor = '#10b981';
+                    badge.style.color = '#6ee7b7';
+                } else {
+                    badge.innerHTML = '<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 8px #f59e0b;"></span> AIRPLANE / OFFLINE MODE ACTIVE — LOCAL ENGINE RUNNING';
+                    badge.style.borderColor = '#f59e0b';
+                    badge.style.color = '#fde68a';
+                }
+            }
+        }
+        window.addEventListener('online', updateOfflineStatus);
+        window.addEventListener('offline', updateOfflineStatus);
+        updateOfflineStatus();
+
+        // Initialize Everything
+        initGraphics();
+        setupInputs();
+        animate();
+
+            // Loading screen dismissal
+            const lBar = document.getElementById('loading-bar');
+            const lText = document.getElementById('loading-text');
+            if (lBar) lBar.style.width = '100%';
+            if (lText) lText.innerText = 'Ready to Run!';
+            setTimeout(() => {
+                const ls = document.getElementById('loading-screen');
+                if (ls) {
+                    ls.style.opacity = '0';
+                    setTimeout(() => { ls.style.display = 'none'; }, 400);
+                }
+            }, 300);
+
+    </script>
+</body>
+</html>
