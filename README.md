@@ -11,13 +11,22 @@ A high-speed 3D endless runner game set in the metropolitan streets of **Dhaka, 
 
 ## 🌟 Key Features
 
-- **Procedural Dhaka World Generation**: Endless modular carriageway tiles (Straight paths, 90° Junction Turns, and T-Junctions).
-- **Authentic Dhaka Low-Poly Obstacles**:
-  - 🛺 **Cycle Rickshaw** (148 tris): Red body, yellow hood, 3 spoked wheels.
-  - 🛺 **CNG Auto Rickshaw** (136 tris): Distinctive green chassis (`#15803D`), yellow taxi roof, black roll bars.
-  - 🚌 **Local Transit Bus ("Murir Tin")** (164 tris): Blue body with yellow identity stripe and roof cargo luggage.
-  - 🏪 **Street Market Stall (Tong)** (108 tris): 4 bamboo posts, overhead blue tarp canopy (allows sliding underneath!).
-  - 🚧 **DMP Police Barricade & Pothole** (96 tris): Dhaka Metropolitan Police barricade with reflective white stripes and sunken asphalt pothole (requires jump!).
+- **Procedural Dhaka Tile System with Sockets**:
+  - Modular procedural tiles (`Straight`, `90° Turn Left/Right`, `T-Junction`).
+  - Formal socket connection points on every tile: `entrySocket`, `exitSocket(s)`, `obstacleSlots`, `coinSlots`, and `powerupSlot`.
+  - T-Junction tile with dual branching paths (steer into Left or Right branch with interactive warning).
+  - Instanced roadside low-poly Dhaka architecture (multi-story buildings with balconies and rooftop water tanks).
+- **Procedural Obstacle Factory**:
+  - Centralized `ObstacleFactory` managing procedural low-poly obstacle generation with collision classification:
+    - 🛺 **Cycle Rickshaw** (148 tris): Red body, yellow canopy, 3 spoked wheels (Pillar avoidance).
+    - 🛺 **CNG Auto Rickshaw** (136 tris): Green chassis (`#15803D`), yellow taxi roof, black roll bars (Pillar avoidance).
+    - 🚌 **Local Transit Bus ("Murir Tin")** (164 tris): Classic blue body, yellow identity stripe, roof cargo (Pillar avoidance).
+    - 🏪 **Street Market Stall (Tong)** (108 tris): 4 bamboo posts, overhead blue tarp canopy (Slide under!).
+    - 🚧 **DMP Police Barricade & Pothole** (96 tris): DMP barricade with reflective white stripes and sunken asphalt pothole (Jump over!).
+- **Engine Debug Scene & Live Telemetry**:
+  - Interactive debug mode with 3D wireframe socket gizmos (Green for Entry, Cyan for Exits, Red for Hazards, Gold for Coins).
+  - Real-time engine telemetry HUD displaying FPS, frame delta, speed, active tiles, obstacles count, draw calls, and vertex/triangle count.
+  - Quick toggle button `🐞 DEBUG` and keyboard shortcut `\`.
 - **Pursuit Guardian AI**: Cop Daddy (Commander Habib) aggressively pursues the runner, surging into danger distance upon stumbling.
 - **Runners & Skins**: Play as **Dr. Araf** (Executive Suit or Rooftop Casual) or **Cop Daddy**.
 - **100% Offline Capable**: Zero network calls required during gameplay. Local progress (High Score, Gold Coins) persists across browser sessions via `localStorage`.
@@ -32,9 +41,11 @@ A high-speed 3D endless runner game set in the metropolitan streets of **Dhaka, 
 | :--- | :--- | :--- |
 | **Steer Left / Right** | `A` / `D` or `◀` / `▶` | Swipe Left / Right |
 | **90° Turn at Junction** | `A` / `D` or `◀` / `▶` at turn prompt | Swipe in turn direction |
+| **T-Junction Branch Choice** | `A` / `D` or `◀` / `▶` at T-Junction prompt | Swipe Left or Right |
 | **Jump over Barricade** | `W` or `▲` or `Space` | Swipe Up |
 | **Slide under Stalls / Dive** | `S` or `▼` | Swipe Down |
 | **Activate Power-Up** | `Space` (when meter is full) | Double-Tap screen / Power meter |
+| **Toggle Debug Gizmos & HUD**| `\` (Backslash) | Tap `🐞 DEBUG` button |
 | **Pause / Resume** | `P` or `Esc` | Floating Pause button (bottom-right) |
 
 ---

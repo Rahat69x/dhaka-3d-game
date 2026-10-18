@@ -539,6 +539,52 @@
                 font-size: 18px;
             }
         }
+
+        .btn-debug-chip {
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: #38bdf8;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            pointer-events: auto;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        }
+        .btn-debug-chip:hover {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: #38bdf8;
+            color: #ffffff;
+            transform: scale(1.05);
+        }
+        #debug-panel {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid #38bdf8;
+            border-radius: 14px;
+            padding: 14px 18px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #e2e8f0;
+            z-index: 9999;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            max-width: 330px;
+            line-height: 1.6;
+            pointer-events: none;
+        }
+        #turn-indicator.t-junction {
+            background: rgba(245, 158, 11, 0.92);
+            border-color: #fbbf24;
+            box-shadow: 0 0 35px rgba(245, 158, 11, 0.7);
+        }
     </style>
 </head>
 <body>
@@ -595,14 +641,30 @@
                 </div>
             </div>
 
-            <!-- Bottom-Right: Thumb-Friendly Floating Pause Button -->
-            <div id="bottom-right-controls">
+            <!-- Bottom-Right: Thumb-Friendly Floating Pause Button & Debug Toggle -->
+            <div id="bottom-right-controls" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <button id="btn-debug-toggle" class="btn-debug-chip" title="Toggle 3D Socket Gizmos & Engine Telemetry (\ key)">🐞 DEBUG</button>
                 <button id="btn-pause" class="btn-pause-floating" title="Pause Game">⏸</button>
             </div>
         </div>
 
         <!-- Turn Notice -->
         <div id="turn-indicator">⚠️ TURN AHEAD! SWIPE TO PIVOT</div>
+
+        <!-- Live Engine Telemetry Overlay -->
+        <div id="debug-panel">
+            <div style="color:#38bdf8; font-weight:900; margin-bottom:4px; border-bottom:1px solid rgba(56,189,248,0.3); padding-bottom:4px; display:flex; justify-content:space-between;">
+                <span>⚙️ ENGINE TELEMETRY</span>
+                <span style="color:#f59e0b; font-size:10px;">PROCEDURAL</span>
+            </div>
+            <div>FPS: <span id="dbg-fps" style="color:#10b981; font-weight:800;">60</span> (<span id="dbg-ms">16.6</span> ms)</div>
+            <div>Speed: <span id="dbg-speed" style="color:#38bdf8; font-weight:800;">16.0</span> m/s | Dist: <span id="dbg-dist">0</span> m</div>
+            <div>Tiles: <span id="dbg-tiles" style="color:#fbbf24; font-weight:800;">7</span> (Sockets Active)</div>
+            <div>Obstacles: <span id="dbg-obs" style="color:#f87171; font-weight:800;">0</span> (Factory Managed)</div>
+            <div>Calls: <span id="dbg-calls">0</span> | Tris: <span id="dbg-tris">0</span></div>
+            <div>Lane: <span id="dbg-lane">0</span> | Height Y: <span id="dbg-y">0.00</span></div>
+            <div style="margin-top:4px; color:#94a3b8; font-size:10px;">Sockets: 🟢 Entry | 🔵 Exits | 🔴 Hazards</div>
+        </div>
 
         <!-- Main Menu -->
         <div id="menu-screen" class="modal-screen active">
@@ -620,6 +682,7 @@
                     <button id="btn-maps" class="btn btn-secondary">🗺️ CUSTOM MAPS</button>
                     <button id="btn-missions" class="btn btn-secondary">🎯 DAILY MISSIONS</button>
                     <button id="btn-settings" class="btn btn-secondary">⚙️ SETTINGS</button>
+                    <button id="btn-menu-debug" class="btn btn-secondary" style="border-color: rgba(56,189,248,0.3); color:#38bdf8;">🐞 ENGINE DEBUG / GIZMOS</button>
                 </div>
 
                 <div class="controls-hint">
@@ -984,7 +1047,8 @@
             selectedChar: 'Dr. Araf (Executive Suit)',
             selectedSkin: 'suit',
             selectedMap: localStorage.getItem('copdaddy_map') || 'Dhaka City (Metropolitan Corridor)',
-            selectedMapId: localStorage.getItem('copdaddy_map_id') || 'dhaka_city'
+            selectedMapId: localStorage.getItem('copdaddy_map_id') || 'dhaka_city',
+            debugMode: false
         };
 
         // Three.js Scene Setup
@@ -995,9 +1059,10 @@
         let currentAttachPos = new THREE.Vector3(0, 0, 0);
         let currentForward = new THREE.Vector3(0, 0, 1);
         let currentAngle = 0; // In radians: 0 = Z+, PI/2 = X+, etc.
-        let nextTurnType = null; // 'LEFT', 'RIGHT' or null
+        let nextTurnType = null; // 'TURN_LEFT', 'TURN_RIGHT', 'T_JUNCTION' or null
         let turnOpportunity = false;
         let segmentsUntilTurn = 8;
+        let activeTJunction = null;
 
         function initGraphics() {
             const container = document.getElementById('canvas-container');
@@ -1598,293 +1663,338 @@
 
         
         // =================================================================
-        // DHAKA 3D ENVIRONMENT & AUTHENTIC OBSTACLE MESH SYSTEM (PDF SPEC)
+        // DHAKA 3D PROCEDURAL OBSTACLE FACTORY (AUTHENTIC 5-HAZARD SUITE)
+        // Low-poly procedural primitives < 180 tris calibrated to PDF spec
         // =================================================================
-        
-        // 1. Cycle Rickshaw (Low-poly < 150 tris)
-        function createRickshawMesh(laneX, zOffset) {
-            const group = new THREE.Group();
-            group.position.set(laneX, 0, zOffset);
+        const ObstacleFactory = {
+            // 1. Cycle Rickshaw (Low-poly < 150 tris)
+            createRickshaw(laneX, zOffset) {
+                const group = new THREE.Group();
+                group.position.set(laneX, 0, zOffset);
 
-            const frameMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 }); // Rickshaw Red
-            const hoodMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.7 });  // Yellow Canopy
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 }); // Black Rubber/Spokes
-            const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.8, roughness: 0.2 });
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 }); // Rickshaw Red
+                const hoodMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.7 });  // Yellow Canopy
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 }); // Black Rubber/Spokes
+                const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.8, roughness: 0.2 });
 
-            // Passenger Seat Box
-            const seatBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.9), frameMat);
-            seatBox.position.set(0, 0.45, 0);
-            group.add(seatBox);
+                // Passenger Seat Box
+                const seatBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.9), frameMat);
+                seatBox.position.set(0, 0.45, 0);
+                group.add(seatBox);
 
-            // Folded Canopy Hood
-            const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 1.22, 8, 1, false, 0, Math.PI), hoodMat);
-            hood.rotation.z = Math.PI / 2;
-            hood.position.set(0, 0.95, -0.2);
-            group.add(hood);
+                // Folded Canopy Hood
+                const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 1.22, 8, 1, false, 0, Math.PI), hoodMat);
+                hood.rotation.z = Math.PI / 2;
+                hood.position.set(0, 0.95, -0.2);
+                group.add(hood);
 
-            // Rear Axle & Wheels
-            const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12);
-            wheelGeo.rotateZ(Math.PI / 2);
-            const leftWheel = new THREE.Mesh(wheelGeo, wheelMat);
-            leftWheel.position.set(-0.68, 0.42, 0.1);
-            group.add(leftWheel);
+                // Rear Axle & Wheels
+                const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12);
+                wheelGeo.rotateZ(Math.PI / 2);
+                const leftWheel = new THREE.Mesh(wheelGeo, wheelMat);
+                leftWheel.position.set(-0.68, 0.42, 0.1);
+                group.add(leftWheel);
 
-            const rightWheel = new THREE.Mesh(wheelGeo, wheelMat);
-            rightWheel.position.set(0.68, 0.42, 0.1);
-            group.add(rightWheel);
+                const rightWheel = new THREE.Mesh(wheelGeo, wheelMat);
+                rightWheel.position.set(0.68, 0.42, 0.1);
+                group.add(rightWheel);
 
-            // Front Bicycle Frame & Handlebars
-            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), chromeMat);
-            stem.position.set(0, 0.55, 0.85);
-            group.add(stem);
+                // Front Bicycle Frame & Handlebars
+                const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), chromeMat);
+                stem.position.set(0, 0.55, 0.85);
+                group.add(stem);
 
-            const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.05), chromeMat);
-            handlebar.position.set(0, 0.92, 0.82);
-            group.add(handlebar);
+                const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.05), chromeMat);
+                handlebar.position.set(0, 0.92, 0.82);
+                group.add(handlebar);
 
-            const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
-            frontWheel.position.set(0, 0.42, 1.1);
-            group.add(frontWheel);
+                const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+                frontWheel.position.set(0, 0.42, 1.1);
+                group.add(frontWheel);
 
-            // Passenger Backrest
-            const backrest = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.6, 0.1), hoodMat);
-            backrest.position.set(0, 0.85, -0.4);
-            group.add(backrest);
+                // Passenger Backrest
+                const backrest = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.6, 0.1), hoodMat);
+                backrest.position.set(0, 0.85, -0.4);
+                group.add(backrest);
 
-            return group;
-        }
+                return group;
+            },
 
-        // 2. CNG Auto Rickshaw (Green Three-Wheeler Taxi < 140 tris)
-        function createCNGMesh(laneX, zOffset) {
-            const group = new THREE.Group();
-            group.position.set(laneX, 0, zOffset);
+            // 2. CNG Auto Rickshaw (Green Three-Wheeler Taxi < 140 tris)
+            createCNG(laneX, zOffset) {
+                const group = new THREE.Group();
+                group.position.set(laneX, 0, zOffset);
 
-            const greenMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.45 }); // CNG Green (#15803d)
-            const yellowRoofMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.6 }); // Taxi Yellow
-            const blackBarsMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
-            const glassMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.65 });
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.85 });
+                const greenMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.45 }); // CNG Green (#15803d)
+                const yellowRoofMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.6 }); // Taxi Yellow
+                const blackBarsMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+                const glassMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.65 });
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.85 });
 
-            // Lower Chassis
-            const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.65, 1.8), greenMat);
-            chassis.position.set(0, 0.45, 0);
-            group.add(chassis);
+                // Lower Chassis
+                const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.65, 1.8), greenMat);
+                chassis.position.set(0, 0.45, 0);
+                group.add(chassis);
 
-            // Yellow Roof Top
-            const roof = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.15, 1.7), yellowRoofMat);
-            roof.position.set(0, 1.45, 0);
-            group.add(roof);
+                // Yellow Roof Top
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.15, 1.7), yellowRoofMat);
+                roof.position.set(0, 1.45, 0);
+                group.add(roof);
 
-            // Side Safety Roll-cage Grille / Bars
-            const leftBar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.6), blackBarsMat);
-            leftBar.position.set(-0.62, 1.05, 0);
-            group.add(leftBar);
+                // Side Safety Roll-cage Grille / Bars
+                const leftBar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.6), blackBarsMat);
+                leftBar.position.set(-0.62, 1.05, 0);
+                group.add(leftBar);
 
-            const rightBar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.6), blackBarsMat);
-            rightBar.position.set(0.62, 1.05, 0);
-            group.add(rightBar);
+                const rightBar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.75, 1.6), blackBarsMat);
+                rightBar.position.set(0.62, 1.05, 0);
+                group.add(rightBar);
 
-            // Front Windshield
-            const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.6, 0.05), glassMat);
-            windshield.position.set(0, 1.05, 0.85);
-            group.add(windshield);
+                // Front Windshield
+                const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.6, 0.05), glassMat);
+                windshield.position.set(0, 1.05, 0.85);
+                group.add(windshield);
 
-            // Headlight
-            const light = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.08), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
-            light.position.set(0, 0.55, 0.92);
-            group.add(light);
+                // Headlight
+                const light = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.08), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+                light.position.set(0, 0.55, 0.92);
+                group.add(light);
 
-            // 3 Small Wheels
-            const wheelGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.12, 10);
-            wheelGeo.rotateZ(Math.PI / 2);
+                // 3 Small Wheels
+                const wheelGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.12, 10);
+                wheelGeo.rotateZ(Math.PI / 2);
 
-            const rearL = new THREE.Mesh(wheelGeo, wheelMat);
-            rearL.position.set(-0.66, 0.26, -0.55);
-            group.add(rearL);
+                const rearL = new THREE.Mesh(wheelGeo, wheelMat);
+                rearL.position.set(-0.66, 0.26, -0.55);
+                group.add(rearL);
 
-            const rearR = new THREE.Mesh(wheelGeo, wheelMat);
-            rearR.position.set(0.66, 0.26, -0.55);
-            group.add(rearR);
+                const rearR = new THREE.Mesh(wheelGeo, wheelMat);
+                rearR.position.set(0.66, 0.26, -0.55);
+                group.add(rearR);
 
-            const frontW = new THREE.Mesh(wheelGeo, wheelMat);
-            frontW.position.set(0, 0.26, 0.75);
-            group.add(frontW);
+                const frontW = new THREE.Mesh(wheelGeo, wheelMat);
+                frontW.position.set(0, 0.26, 0.75);
+                group.add(frontW);
 
-            return group;
-        }
+                return group;
+            },
 
-        // 3. Dhaka Local Bus ("Murir Tin" Colorful Transit Bus < 170 tris)
-        function createBusMesh(laneX, zOffset) {
-            const group = new THREE.Group();
-            group.position.set(laneX, 0, zOffset);
+            // 3. Dhaka Local Bus ("Murir Tin" Transit Bus < 170 tris)
+            createBus(laneX, zOffset) {
+                const group = new THREE.Group();
+                group.position.set(laneX, 0, zOffset);
 
-            const busBlueMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
-            const stripeYellowMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5 });
-            const windowDarkMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-            const roofMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.7 });
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
-            const cargoMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.8 });
+                const busBlueMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
+                const stripeYellowMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5 });
+                const windowDarkMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+                const roofMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.7 });
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+                const cargoMat = new THREE.MeshStandardMaterial({ color: 0x78716c, roughness: 0.8 });
 
-            // Lower Bus Body
-            const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.8, 3.8), busBlueMat);
-            lowerBody.position.set(0, 0.65, 0);
-            group.add(lowerBody);
+                // Lower Bus Body
+                const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.8, 3.8), busBlueMat);
+                lowerBody.position.set(0, 0.65, 0);
+                group.add(lowerBody);
 
-            // Middle Yellow Identity Stripe
-            const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.2, 3.82), stripeYellowMat);
-            stripe.position.set(0, 1.1, 0);
-            group.add(stripe);
+                // Middle Yellow Identity Stripe
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.2, 3.82), stripeYellowMat);
+                stripe.position.set(0, 1.1, 0);
+                group.add(stripe);
 
-            // Upper Window Band
-            const windowBand = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.6, 3.75), windowDarkMat);
-            windowBand.position.set(0, 1.48, 0);
-            group.add(windowBand);
+                // Upper Window Band
+                const windowBand = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.6, 3.75), windowDarkMat);
+                windowBand.position.set(0, 1.48, 0);
+                group.add(windowBand);
 
-            // Roof Curved Slab
-            const roof = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.15, 3.85), roofMat);
-            roof.position.set(0, 1.85, 0);
-            group.add(roof);
+                // Roof Slab
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.15, 3.85), roofMat);
+                roof.position.set(0, 1.85, 0);
+                group.add(roof);
 
-            // Roof Cargo & Luggage Bundles
-            const luggage = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 2.2), cargoMat);
-            luggage.position.set(0, 2.05, 0);
-            group.add(luggage);
+                // Roof Luggage Bundles
+                const luggage = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 2.2), cargoMat);
+                luggage.position.set(0, 2.05, 0);
+                group.add(luggage);
 
-            // Heavy Wheels
-            const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.2, 10);
-            wheelGeo.rotateZ(Math.PI / 2);
+                // Wheels
+                const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.2, 10);
+                wheelGeo.rotateZ(Math.PI / 2);
 
-            const wFL = new THREE.Mesh(wheelGeo, wheelMat);
-            wFL.position.set(-0.84, 0.36, 1.2);
-            group.add(wFL);
+                const wFL = new THREE.Mesh(wheelGeo, wheelMat);
+                wFL.position.set(-0.84, 0.36, 1.2);
+                group.add(wFL);
 
-            const wFR = new THREE.Mesh(wheelGeo, wheelMat);
-            wFR.position.set(0.84, 0.36, 1.2);
-            group.add(wFR);
+                const wFR = new THREE.Mesh(wheelGeo, wheelMat);
+                wFR.position.set(0.84, 0.36, 1.2);
+                group.add(wFR);
 
-            const wRL = new THREE.Mesh(wheelGeo, wheelMat);
-            wRL.position.set(-0.84, 0.36, -1.2);
-            group.add(wRL);
+                const wRL = new THREE.Mesh(wheelGeo, wheelMat);
+                wRL.position.set(-0.84, 0.36, -1.2);
+                group.add(wRL);
 
-            const wRR = new THREE.Mesh(wheelGeo, wheelMat);
-            wRR.position.set(0.84, 0.36, -1.2);
-            group.add(wRR);
+                const wRR = new THREE.Mesh(wheelGeo, wheelMat);
+                wRR.position.set(0.84, 0.36, -1.2);
+                group.add(wRR);
 
-            return group;
-        }
+                return group;
+            },
 
-        // 4. Street Market Stall / Chaa-Tong (Slide under or steer clear < 110 tris)
-        function createMarketStallMesh(laneX, zOffset) {
-            const group = new THREE.Group();
-            group.position.set(laneX, 0, zOffset);
+            // 4. Street Market Stall / Chaa-Tong (Slide under < 110 tris)
+            createMarketStall(laneX, zOffset) {
+                const group = new THREE.Group();
+                group.position.set(laneX, 0, zOffset);
 
-            const bambooMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 });
-            const tarpBlueMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.6 });
-            const crateMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.85 });
-            const fruitMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 });
+                const bambooMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 });
+                const tarpBlueMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.6 });
+                const crateMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.85 });
+                const fruitMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 });
 
-            // 4 Bamboo Uprights
-            const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.1, 6);
-            const p1 = new THREE.Mesh(poleGeo, bambooMat); p1.position.set(-0.8, 1.05, -0.6); group.add(p1);
-            const p2 = new THREE.Mesh(poleGeo, bambooMat); p2.position.set(0.8, 1.05, -0.6); group.add(p2);
-            const p3 = new THREE.Mesh(poleGeo, bambooMat); p3.position.set(-0.8, 0.95, 0.6); group.add(p3);
-            const p4 = new THREE.Mesh(poleGeo, bambooMat); p4.position.set(0.8, 0.95, 0.6); group.add(p4);
+                // 4 Bamboo Uprights
+                const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.1, 6);
+                const p1 = new THREE.Mesh(poleGeo, bambooMat); p1.position.set(-0.8, 1.05, -0.6); group.add(p1);
+                const p2 = new THREE.Mesh(poleGeo, bambooMat); p2.position.set(0.8, 1.05, -0.6); group.add(p2);
+                const p3 = new THREE.Mesh(poleGeo, bambooMat); p3.position.set(-0.8, 0.95, 0.6); group.add(p3);
+                const p4 = new THREE.Mesh(poleGeo, bambooMat); p4.position.set(0.8, 0.95, 0.6); group.add(p4);
 
-            // Overhead Slanted Tarp Canopy (Height 1.95 - clearance for sliding under!)
-            const tarp = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.06, 1.55), tarpBlueMat);
-            tarp.position.set(0, 1.95, 0);
-            tarp.rotation.x = 0.12;
-            group.add(tarp);
+                // Overhead Slanted Tarp Canopy (Height 1.95 - clearance for sliding under)
+                const tarp = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.06, 1.55), tarpBlueMat);
+                tarp.position.set(0, 1.95, 0);
+                tarp.rotation.x = 0.12;
+                group.add(tarp);
 
-            // Table Plank
-            const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.9), crateMat);
-            table.position.set(0, 0.65, 0);
-            group.add(table);
+                // Table Plank
+                const table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.9), crateMat);
+                table.position.set(0, 0.65, 0);
+                group.add(table);
 
-            // Vegetable/Tea Produce on Table
-            const produce = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.22, 0.7), fruitMat);
-            produce.position.set(0, 0.8, 0);
-            group.add(produce);
+                // Produce / Tea wares
+                const produce = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.22, 0.7), fruitMat);
+                produce.position.set(0, 0.8, 0);
+                group.add(produce);
 
-            return group;
-        }
+                return group;
+            },
 
-        // 5. DMP Police Barricade & Pothole (Jump over < 100 tris)
-        function createDMPBarrierMesh(laneX, zOffset) {
-            const group = new THREE.Group();
-            group.position.set(laneX, 0, zOffset);
+            // 5. DMP Police Barricade & Pothole (Jump over < 100 tris)
+            createBarrier(laneX, zOffset) {
+                const group = new THREE.Group();
+                group.position.set(laneX, 0, zOffset);
 
-            const dmpBlueMat = new THREE.MeshStandardMaterial({ color: 0x0d47a1, roughness: 0.4 }); // DMP Blue (#0D47A1)
-            const whiteStripeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
-            const warningLightMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
-            const potholeMat = new THREE.MeshBasicMaterial({ color: 0x09090b });
+                const dmpBlueMat = new THREE.MeshStandardMaterial({ color: 0x0d47a1, roughness: 0.4 }); // DMP Blue (#0D47A1)
+                const whiteStripeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+                const warningLightMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+                const potholeMat = new THREE.MeshBasicMaterial({ color: 0x09090b });
 
-            // Main Barricade Beam
-            const beam = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.8, 0.6, 0.15), dmpBlueMat);
-            beam.position.set(0, 0.6, 0);
-            group.add(beam);
+                // Main Barricade Beam
+                const beam = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.8, 0.6, 0.15), dmpBlueMat);
+                beam.position.set(0, 0.6, 0);
+                group.add(beam);
 
-            // Reflective White Center Stripes
-            const stripe1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
-            stripe1.position.set(-1.0, 0.6, 0);
-            group.add(stripe1);
+                // Reflective White Stripes
+                const stripe1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
+                stripe1.position.set(-1.0, 0.6, 0);
+                group.add(stripe1);
 
-            const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
-            stripe2.position.set(0, 0.6, 0);
-            group.add(stripe2);
+                const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
+                stripe2.position.set(0, 0.6, 0);
+                group.add(stripe2);
 
-            const stripe3 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
-            stripe3.position.set(1.0, 0.6, 0);
-            group.add(stripe3);
+                const stripe3 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.62, 0.17), whiteStripeMat);
+                stripe3.position.set(1.0, 0.6, 0);
+                group.add(stripe3);
 
-            // Support Legs (A-frame style)
-            const legGeo = new THREE.BoxGeometry(0.1, 0.7, 0.5);
-            const legL = new THREE.Mesh(legGeo, dmpBlueMat); legL.position.set(-1.8, 0.35, 0); group.add(legL);
-            const legR = new THREE.Mesh(legGeo, dmpBlueMat); legR.position.set(1.8, 0.35, 0); group.add(legR);
+                // Support Legs
+                const legGeo = new THREE.BoxGeometry(0.1, 0.7, 0.5);
+                const legL = new THREE.Mesh(legGeo, dmpBlueMat); legL.position.set(-1.8, 0.35, 0); group.add(legL);
+                const legR = new THREE.Mesh(legGeo, dmpBlueMat); legR.position.set(1.8, 0.35, 0); group.add(legR);
 
-            // Yellow Flasher Lamp
-            const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.16, 8), warningLightMat);
-            beacon.position.set(0, 1.0, 0);
-            group.add(beacon);
+                // Flasher Lamp
+                const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.16, 8), warningLightMat);
+                beacon.position.set(0, 1.0, 0);
+                group.add(beacon);
 
-            // Sunken Asphalt Pothole Cutout on Road
-            const pothole = new THREE.Mesh(new THREE.CircleGeometry(0.55, 10), potholeMat);
-            pothole.rotation.x = -Math.PI / 2;
-            pothole.position.set(0, 0.02, 0.7);
-            group.add(pothole);
+                // Pothole Cutout on Road
+                const pothole = new THREE.Mesh(new THREE.CircleGeometry(0.55, 10), potholeMat);
+                pothole.rotation.x = -Math.PI / 2;
+                pothole.position.set(0, 0.02, 0.7);
+                group.add(pothole);
 
-            return group;
-        }
+                return group;
+            },
 
-        // Procedural Path Assembly
-        function createSegment(type = 'STRAIGHT', angle = 0, origin = new THREE.Vector3(0,0,0)) {
-            const segment = new THREE.Group();
-            segment.userData = {
-                type: type,
-                angle: angle,
-                obstacles: [],
-                coins: [],
-                powerups: [],
-                turnTrigger: false,
-                cleared: false
-            };
+            // Universal Factory Dispatch
+            create(type, laneX, zOffset) {
+                switch(type) {
+                    case 'rickshaw':
+                        return {
+                            mesh: this.createRickshaw(laneX, zOffset),
+                            type: 'PILLAR',
+                            name: 'Cycle Rickshaw',
+                            localZ: zOffset,
+                            lane: Math.round(laneX / CONFIG.laneWidth)
+                        };
+                    case 'cng':
+                        return {
+                            mesh: this.createCNG(laneX, zOffset),
+                            type: 'PILLAR',
+                            name: 'CNG Auto Rickshaw',
+                            localZ: zOffset,
+                            lane: Math.round(laneX / CONFIG.laneWidth)
+                        };
+                    case 'bus':
+                        return {
+                            mesh: this.createBus(laneX, zOffset),
+                            type: 'PILLAR',
+                            name: 'Dhaka Local Bus',
+                            localZ: zOffset,
+                            lane: Math.round(laneX / CONFIG.laneWidth)
+                        };
+                    case 'market_stall':
+                        return {
+                            mesh: this.createMarketStall(laneX, zOffset),
+                            type: 'HIGH_ARCH',
+                            name: 'Market Stall',
+                            localZ: zOffset,
+                            lane: Math.round(laneX / CONFIG.laneWidth)
+                        };
+                    case 'barrier':
+                        return {
+                            mesh: this.createBarrier(0, zOffset),
+                            type: 'LOW_BARRIER',
+                            name: 'DMP Barricade',
+                            localZ: zOffset,
+                            lane: 99
+                        };
+                    default:
+                        return null;
+                }
+            }
+        };
 
-            const isDhaka = (STATE.selectedMapId === 'dhaka_city');
-            const roadMat = new THREE.MeshStandardMaterial({ 
-                color: isDhaka ? 0x2b2d2f : 0x334155, // Dhaka Asphalt (#2B2D2F) vs Sanctuary Flagstone
-                roughness: isDhaka ? 0.75 : 0.85 
-            });
-            const curbMat = new THREE.MeshStandardMaterial({ 
-                color: isDhaka ? 0xf59e0b : 0x64748b, // Dhaka Yellow Municipal Curb (#F59E0B)
-                roughness: 0.7 
-            });
-            const wallMat = new THREE.MeshStandardMaterial({ 
-                color: isDhaka ? 0xc87d65 : 0x1e293b, // Dhaka Red Brick Facade (#C87D65)
-                roughness: 0.9 
-            });
+        // =================================================================
+        // PROCEDURAL TILE SYSTEM WITH FORMAL SOCKET CONNECTIONS
+        // Straight, 90° Turn (Left/Right), and T-Junction with Dual Exits
+        // =================================================================
+        const TileSystem = {
+            TYPES: {
+                STRAIGHT: 'STRAIGHT',
+                TURN_LEFT: 'TURN_LEFT',
+                TURN_RIGHT: 'TURN_RIGHT',
+                T_JUNCTION: 'T_JUNCTION'
+            },
 
-            if (type === 'STRAIGHT') {
-                // Ground road
+            createStraight(origin, angle, isDhaka) {
+                const segment = new THREE.Group();
+                const roadMat = new THREE.MeshStandardMaterial({ 
+                    color: isDhaka ? 0x2b2d2f : 0x334155, 
+                    roughness: isDhaka ? 0.75 : 0.85 
+                });
+                const curbMat = new THREE.MeshStandardMaterial({ 
+                    color: isDhaka ? 0xf59e0b : 0x64748b, 
+                    roughness: 0.7 
+                });
+
+                // Ground Road
                 const road = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 3, 0.4, CONFIG.segmentLength), roadMat);
                 road.position.set(0, -0.2, CONFIG.segmentLength / 2);
                 road.receiveShadow = true;
@@ -1899,29 +2009,212 @@
                 rightCurb.position.set((CONFIG.laneWidth * 1.5 + 0.2), 0.2, CONFIG.segmentLength / 2);
                 segment.add(rightCurb);
 
-                // Populate items (if not the starting safe segments)
-                if (activeSegments.length > 2) {
-                    populateSegmentHazards(segment);
+                // Instanced Roadside Buildings for Dhaka atmosphere
+                if (isDhaka) {
+                    addRoadsideBuildings(segment);
                 }
-            } else if (type === 'TURN_LEFT' || type === 'TURN_RIGHT') {
-                // Corner Junction platform
+
+                // Formal Tile Sockets
+                const entrySocket = new THREE.Vector3(0, 0, 0);
+                const exitSocket = new THREE.Vector3(0, 0, CONFIG.segmentLength);
+                const obstacleSlots = [
+                    new THREE.Vector3(-CONFIG.laneWidth, 0, CONFIG.segmentLength * 0.55),
+                    new THREE.Vector3(0, 0, CONFIG.segmentLength * 0.55),
+                    new THREE.Vector3(CONFIG.laneWidth, 0, CONFIG.segmentLength * 0.55)
+                ];
+                const coinSlots = [];
+                for (let c = 0; c < 4; c++) {
+                    coinSlots.push(new THREE.Vector3(0, 0.7, 4 + c * 3.2));
+                }
+
+                segment.userData = {
+                    type: this.TYPES.STRAIGHT,
+                    angle: angle,
+                    sockets: {
+                        entry: entrySocket,
+                        exit: exitSocket,
+                        obstacleSlots: obstacleSlots,
+                        coinSlots: coinSlots
+                    },
+                    obstacles: [],
+                    coins: [],
+                    powerups: [],
+                    turnTrigger: false
+                };
+
+                segment.position.copy(origin);
+                segment.rotation.y = angle;
+                return segment;
+            },
+
+            createTurn(type, origin, angle, isDhaka) {
+                const segment = new THREE.Group();
                 const junctionSize = CONFIG.laneWidth * 3 + 2;
+                const roadMat = new THREE.MeshStandardMaterial({ 
+                    color: isDhaka ? 0x2b2d2f : 0x334155, 
+                    roughness: isDhaka ? 0.75 : 0.85 
+                });
+                const wallMat = new THREE.MeshStandardMaterial({ 
+                    color: isDhaka ? 0xc87d65 : 0x1e293b, 
+                    roughness: 0.9 
+                });
+
+                // Platform
                 const platform = new THREE.Mesh(new THREE.BoxGeometry(junctionSize, 0.4, junctionSize), roadMat);
                 platform.position.set(0, -0.2, junctionSize / 2);
                 segment.add(platform);
 
-                // Front cliff wall blocking straight continuation (forces 90° turn!)
-                const blockWall = new THREE.Mesh(new THREE.BoxGeometry(junctionSize, 3.0, 0.8), wallMat);
-                blockWall.position.set(0, 1.3, junctionSize);
+                // Front Block Wall
+                const blockWall = new THREE.Mesh(new THREE.BoxGeometry(junctionSize, 3.2, 0.8), wallMat);
+                blockWall.position.set(0, 1.4, junctionSize);
                 segment.add(blockWall);
 
-                segment.userData.turnTrigger = true;
-                segment.userData.turnDirection = type === 'TURN_LEFT' ? -1 : 1;
+                // Side Wall on blocked flank
+                const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3.2, junctionSize), wallMat);
+                const sideSign = (type === this.TYPES.TURN_LEFT) ? (junctionSize / 2) : (-junctionSize / 2);
+                sideWall.position.set(sideSign, 1.4, junctionSize / 2);
+                segment.add(sideWall);
+
+                // Sockets
+                const entrySocket = new THREE.Vector3(0, 0, 0);
+                const exitOffset = (type === this.TYPES.TURN_LEFT) ? (-junctionSize / 2) : (junctionSize / 2);
+                const exitSocket = new THREE.Vector3(exitOffset, 0, junctionSize / 2);
+
+                segment.userData = {
+                    type: type,
+                    angle: angle,
+                    turnTrigger: true,
+                    turnDirection: (type === this.TYPES.TURN_LEFT ? -1 : 1),
+                    sockets: {
+                        entry: entrySocket,
+                        exit: exitSocket
+                    },
+                    obstacles: [],
+                    coins: [],
+                    powerups: []
+                };
+
+                segment.position.copy(origin);
+                segment.rotation.y = angle;
+                return segment;
+            },
+
+            createTJunction(origin, angle, isDhaka) {
+                const segment = new THREE.Group();
+                const junctionSize = CONFIG.laneWidth * 3 + 2;
+                const armLength = CONFIG.segmentLength * 0.75;
+                const roadMat = new THREE.MeshStandardMaterial({ 
+                    color: isDhaka ? 0x2b2d2f : 0x334155, 
+                    roughness: isDhaka ? 0.75 : 0.85 
+                });
+                const wallMat = new THREE.MeshStandardMaterial({ 
+                    color: isDhaka ? 0xc87d65 : 0x1e293b, 
+                    roughness: 0.9 
+                });
+
+                // Central Crossroad Hub
+                const platform = new THREE.Mesh(new THREE.BoxGeometry(junctionSize, 0.4, junctionSize), roadMat);
+                platform.position.set(0, -0.2, junctionSize / 2);
+                segment.add(platform);
+
+                // Left Branch Arm Road
+                const leftArm = new THREE.Mesh(new THREE.BoxGeometry(armLength, 0.4, junctionSize), roadMat);
+                leftArm.position.set(-(junctionSize / 2 + armLength / 2), -0.2, junctionSize / 2);
+                segment.add(leftArm);
+
+                // Right Branch Arm Road
+                const rightArm = new THREE.Mesh(new THREE.BoxGeometry(armLength, 0.4, junctionSize), roadMat);
+                rightArm.position.set((junctionSize / 2 + armLength / 2), -0.2, junctionSize / 2);
+                segment.add(rightArm);
+
+                // Blocking Perimeter Wall with Billboard
+                const totalWidth = junctionSize + armLength * 2;
+                const frontWall = new THREE.Mesh(new THREE.BoxGeometry(totalWidth, 3.4, 0.8), wallMat);
+                frontWall.position.set(0, 1.5, junctionSize);
+                segment.add(frontWall);
+
+                // Signboard
+                const signMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.5 });
+                const sign = new THREE.Mesh(new THREE.BoxGeometry(junctionSize * 0.95, 1.2, 0.1), signMat);
+                sign.position.set(0, 1.8, junctionSize - 0.42);
+                segment.add(sign);
+
+                // Sockets (Dual Branch Exits)
+                const entrySocket = new THREE.Vector3(0, 0, 0);
+                const exitLeft = new THREE.Vector3(-(junctionSize / 2 + armLength), 0, junctionSize / 2);
+                const exitRight = new THREE.Vector3((junctionSize / 2 + armLength), 0, junctionSize / 2);
+
+                segment.userData = {
+                    type: this.TYPES.T_JUNCTION,
+                    angle: angle,
+                    baseAngle: angle,
+                    turnTrigger: true,
+                    isTJunction: true,
+                    sockets: {
+                        entry: entrySocket,
+                        exitLeft: exitLeft,
+                        exitRight: exitRight
+                    },
+                    obstacles: [],
+                    coins: [],
+                    powerups: []
+                };
+
+                segment.position.copy(origin);
+                segment.rotation.y = angle;
+                return segment;
+            }
+        };
+
+        // Instanced Dhaka Roadside Architecture (Dense urban atmosphere & rooftop water tanks)
+        function addRoadsideBuildings(segment) {
+            const buildingColors = [0xb45309, 0x1e3a8a, 0x047857, 0x9a3412, 0x475569];
+            for (let side of [-1, 1]) {
+                const bWidth = 5.0;
+                const bDepth = CONFIG.segmentLength * 0.45;
+                const bHeight = 10 + Math.random() * 8;
+                const color = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+                const bMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.85 });
+                const building = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, bDepth), bMat);
+                const xPos = side * (CONFIG.laneWidth * 1.5 + bWidth / 2 + 0.4);
+                building.position.set(xPos, bHeight / 2 - 0.2, CONFIG.segmentLength * 0.25);
+                segment.add(building);
+
+                const bHeight2 = 8 + Math.random() * 10;
+                const color2 = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+                const bMat2 = new THREE.MeshStandardMaterial({ color: color2, roughness: 0.85 });
+                const building2 = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight2, bDepth), bMat2);
+                building2.position.set(xPos, bHeight2 / 2 - 0.2, CONFIG.segmentLength * 0.75);
+                segment.add(building2);
+
+                // Rooftop Water Tank (Signature Dhaka cityscape element)
+                const tankMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5 });
+                const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.4, 8), tankMat);
+                tank.position.set(xPos, bHeight + 0.7, CONFIG.segmentLength * 0.25);
+                segment.add(tank);
+            }
+        }
+
+        // Procedural Path Assembly
+        function createSegment(type = 'STRAIGHT', angle = 0, origin = new THREE.Vector3(0,0,0)) {
+            const isDhaka = (STATE.selectedMapId === 'dhaka_city');
+            let segment;
+
+            if (type === TileSystem.TYPES.STRAIGHT) {
+                segment = TileSystem.createStraight(origin, angle, isDhaka);
+                if (activeSegments.length > 2) {
+                    populateSegmentHazards(segment);
+                }
+            } else if (type === TileSystem.TYPES.TURN_LEFT || type === TileSystem.TYPES.TURN_RIGHT) {
+                segment = TileSystem.createTurn(type, origin, angle, isDhaka);
+            } else if (type === TileSystem.TYPES.T_JUNCTION) {
+                segment = TileSystem.createTJunction(origin, angle, isDhaka);
             }
 
-            segment.position.copy(origin);
-            segment.rotation.y = angle;
             scene.add(segment);
+            if (STATE.debugMode && DebugSystem) {
+                DebugSystem.renderSegmentGizmos(segment);
+            }
             return segment;
         }
 
@@ -1931,64 +2224,17 @@
             const isDhaka = (STATE.selectedMapId === 'dhaka_city');
 
             if (isDhaka) {
-                // Authentic Dhaka 5-Obstacle Suite from PDF Specification
-                const dhakaRoll = Math.random();
-                if (dhakaRoll < 0.22) {
-                    // 1. Cycle Rickshaw (Lane blockade - Steer to avoid)
-                    const rickshaw = createRickshawMesh(laneRoll * CONFIG.laneWidth, zOffset);
-                    segment.add(rickshaw);
-                    segment.userData.obstacles.push({
-                        mesh: rickshaw,
-                        type: 'PILLAR',
-                        localZ: zOffset,
-                        lane: laneRoll
-                    });
-                } else if (dhakaRoll < 0.44) {
-                    // 2. CNG Auto Rickshaw (Lane blockade - Steer to avoid)
-                    const cng = createCNGMesh(laneRoll * CONFIG.laneWidth, zOffset);
-                    segment.add(cng);
-                    segment.userData.obstacles.push({
-                        mesh: cng,
-                        type: 'PILLAR',
-                        localZ: zOffset,
-                        lane: laneRoll
-                    });
-                } else if (dhakaRoll < 0.66) {
-                    // 3. DMP Police Barricade & Pothole (Jump over!)
-                    const dmp = createDMPBarrierMesh(0, zOffset);
-                    segment.add(dmp);
-                    segment.userData.obstacles.push({
-                        mesh: dmp,
-                        type: 'LOW_BARRIER',
-                        localZ: zOffset,
-                        lane: 99 // requires jump
-                    });
-                } else if (dhakaRoll < 0.84) {
-                    // 4. Street Market Stall / Chaa Tong (Slide under canopy or steer!)
-                    const stall = createMarketStallMesh(laneRoll * CONFIG.laneWidth, zOffset);
-                    segment.add(stall);
-                    segment.userData.obstacles.push({
-                        mesh: stall,
-                        type: 'HIGH_ARCH',
-                        localZ: zOffset,
-                        lane: laneRoll // allows slide under
-                    });
-                } else {
-                    // 5. Dhaka Local Bus ("Murir Tin" - Heavy lane blockage)
-                    const bus = createBusMesh(laneRoll * CONFIG.laneWidth, zOffset);
-                    segment.add(bus);
-                    segment.userData.obstacles.push({
-                        mesh: bus,
-                        type: 'PILLAR',
-                        localZ: zOffset,
-                        lane: laneRoll
-                    });
+                const types = ['rickshaw', 'cng', 'barrier', 'market_stall', 'bus'];
+                const selectedType = types[Math.floor(Math.random() * types.length)];
+                const obs = ObstacleFactory.create(selectedType, laneRoll * CONFIG.laneWidth, zOffset);
+                if (obs) {
+                    segment.add(obs.mesh);
+                    segment.userData.obstacles.push(obs);
                 }
             } else {
                 // Ancient Sanctuary Theme Obstacles
                 const roll = Math.random();
                 if (roll < 0.35) {
-                    // Low stone barrier (Jump over)
                     const barMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
                     const barrier = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.8, 0.7, 0.5), barMat);
                     barrier.position.set(0, 0.35, zOffset);
@@ -1997,10 +2243,9 @@
                         mesh: barrier,
                         type: 'LOW_BARRIER',
                         localZ: zOffset,
-                        lane: 99 // covers all lanes, requires jump
+                        lane: 99
                     });
                 } else if (roll < 0.65) {
-                    // High Stone Arch / Spiked Log (Slide under)
                     const archMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.7 });
                     const beam = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 2.9, 0.9, 0.6), archMat);
                     beam.position.set(0, 1.45, zOffset);
@@ -2009,10 +2254,9 @@
                         mesh: beam,
                         type: 'HIGH_ARCH',
                         localZ: zOffset,
-                        lane: 99 // requires slide
+                        lane: 99
                     });
                 } else {
-                    // Side Basalt Pillar (Lane switch)
                     const pillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
                     const pillar = new THREE.Mesh(new THREE.BoxGeometry(CONFIG.laneWidth * 0.9, 2.5, 0.9), pillarMat);
                     pillar.position.set(laneRoll * CONFIG.laneWidth, 1.25, zOffset);
@@ -2064,29 +2308,40 @@
         function generateNextSegment() {
             segmentsUntilTurn--;
 
-            let type = 'STRAIGHT';
+            let type = TileSystem.TYPES.STRAIGHT;
             if (segmentsUntilTurn <= 0) {
-                type = Math.random() < 0.5 ? 'TURN_LEFT' : 'TURN_RIGHT';
+                const turnRoll = Math.random();
+                if (turnRoll < 0.35) {
+                    type = TileSystem.TYPES.TURN_LEFT;
+                } else if (turnRoll < 0.70) {
+                    type = TileSystem.TYPES.TURN_RIGHT;
+                } else {
+                    type = TileSystem.TYPES.T_JUNCTION;
+                }
                 segmentsUntilTurn = Math.floor(Math.random() * 5) + 7;
             }
 
             const seg = createSegment(type, currentAngle, currentAttachPos);
             activeSegments.push(seg);
 
-            if (type === 'STRAIGHT') {
+            if (type === TileSystem.TYPES.STRAIGHT) {
                 const offset = currentForward.clone().multiplyScalar(CONFIG.segmentLength);
                 currentAttachPos.add(offset);
-            } else if (type === 'TURN_LEFT') {
+            } else if (type === TileSystem.TYPES.TURN_LEFT) {
                 const junctionSize = CONFIG.laneWidth * 3 + 2;
                 currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
                 currentAngle += Math.PI / 2;
                 currentForward.set(Math.sin(currentAngle), 0, Math.cos(currentAngle));
                 currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
-            } else if (type === 'TURN_RIGHT') {
+            } else if (type === TileSystem.TYPES.TURN_RIGHT) {
                 const junctionSize = CONFIG.laneWidth * 3 + 2;
                 currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
                 currentAngle -= Math.PI / 2;
                 currentForward.set(Math.sin(currentAngle), 0, Math.cos(currentAngle));
+                currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
+            } else if (type === TileSystem.TYPES.T_JUNCTION) {
+                activeTJunction = seg;
+                const junctionSize = CONFIG.laneWidth * 3 + 2;
                 currentAttachPos.add(currentForward.clone().multiplyScalar(junctionSize / 2));
             }
         }
@@ -2098,12 +2353,15 @@
                 scene.remove(seg);
             }
 
+            if (DebugSystem) DebugSystem.clearGizmos();
+
             currentAttachPos.set(0, 0, 0);
             currentForward.set(0, 0, 1);
             currentAngle = 0;
             segmentsUntilTurn = 8;
             nextTurnType = null;
             turnOpportunity = false;
+            activeTJunction = null;
 
             // Reset player states
             STATE.score = 0;
@@ -2132,7 +2390,11 @@
             chaserMesh.rotation.set(0, 0, 0);
             shieldMesh.visible = false;
 
-            document.getElementById('turn-indicator').style.display = 'none';
+            const turnIndicator = document.getElementById('turn-indicator');
+            if (turnIndicator) {
+                turnIndicator.style.display = 'none';
+                turnIndicator.classList.remove('t-junction');
+            }
             document.getElementById('danger-vignette').classList.remove('active');
 
             // Spawn initial segments
@@ -2142,6 +2404,146 @@
 
             updateHUD();
         }
+
+        // =================================================================
+        // ENGINE DEBUG SCENE & LIVE TELEMETRY SYSTEM
+        // 3D Socket Gizmos (Green=Entry, Cyan=Exits, Red=Hazards, Gold=Coins)
+        // =================================================================
+        const DebugSystem = {
+            gizmoGroup: null,
+            frameCount: 0,
+            lastFpsUpdate: 0,
+            fps: 60,
+
+            init(targetScene) {
+                this.gizmoGroup = new THREE.Group();
+                this.gizmoGroup.visible = false;
+                targetScene.add(this.gizmoGroup);
+
+                window.addEventListener('keydown', (e) => {
+                    if (e.key === '\\' || e.code === 'Backslash') {
+                        this.toggle();
+                    }
+                });
+
+                const btn = document.getElementById('btn-debug-toggle');
+                if (btn) btn.addEventListener('click', () => this.toggle());
+                const menuBtn = document.getElementById('btn-menu-debug');
+                if (menuBtn) menuBtn.addEventListener('click', () => this.toggle());
+            },
+
+            toggle() {
+                STATE.debugMode = !STATE.debugMode;
+                if (this.gizmoGroup) {
+                    this.gizmoGroup.visible = STATE.debugMode;
+                }
+                const panel = document.getElementById('debug-panel');
+                if (panel) {
+                    panel.style.display = STATE.debugMode ? 'block' : 'none';
+                }
+                if (STATE.debugMode) {
+                    this.refreshAllGizmos();
+                }
+            },
+
+            clearGizmos() {
+                if (!this.gizmoGroup) return;
+                while (this.gizmoGroup.children.length > 0) {
+                    const child = this.gizmoGroup.children.pop();
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) child.material.dispose();
+                }
+            },
+
+            refreshAllGizmos() {
+                this.clearGizmos();
+                for (const seg of activeSegments) {
+                    this.renderSegmentGizmos(seg);
+                }
+            },
+
+            renderSegmentGizmos(segment) {
+                if (!this.gizmoGroup || !segment.userData || !segment.userData.sockets) return;
+                const sockets = segment.userData.sockets;
+                const segPos = segment.position;
+                const segRot = segment.rotation.y;
+
+                // Entry Socket (Green Wireframe Sphere)
+                if (sockets.entry) {
+                    const entryGeo = new THREE.SphereGeometry(0.35, 8, 8);
+                    const entryMat = new THREE.MeshBasicMaterial({ color: 0x10b981, wireframe: true });
+                    const entryMesh = new THREE.Mesh(entryGeo, entryMat);
+                    const wPos = sockets.entry.clone().applyAxisAngle(new THREE.Vector3(0,1,0), segRot).add(segPos);
+                    entryMesh.position.copy(wPos);
+                    this.gizmoGroup.add(entryMesh);
+                }
+
+                // Exit Socket(s) (Cyan Wireframe Spheres)
+                const exitList = [];
+                if (sockets.exit) exitList.push(sockets.exit);
+                if (sockets.exitLeft) exitList.push(sockets.exitLeft);
+                if (sockets.exitRight) exitList.push(sockets.exitRight);
+
+                for (const ex of exitList) {
+                    const exitGeo = new THREE.SphereGeometry(0.35, 8, 8);
+                    const exitMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true });
+                    const exitMesh = new THREE.Mesh(exitGeo, exitMat);
+                    const wPos = ex.clone().applyAxisAngle(new THREE.Vector3(0,1,0), segRot).add(segPos);
+                    exitMesh.position.copy(wPos);
+                    this.gizmoGroup.add(exitMesh);
+                }
+
+                // Obstacle Gizmos (Red Wireframe Boxes)
+                for (const obs of segment.userData.obstacles) {
+                    const boxGeo = new THREE.BoxGeometry(1.6, 1.8, 1.6);
+                    const boxMat = new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true });
+                    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+                    const obsPos = new THREE.Vector3();
+                    obs.mesh.getWorldPosition(obsPos);
+                    boxMesh.position.copy(obsPos);
+                    this.gizmoGroup.add(boxMesh);
+                }
+            },
+
+            updateTelemetry(dt, activeRenderer) {
+                if (!STATE.debugMode) return;
+                this.frameCount++;
+                const now = performance.now();
+                if (now - this.lastFpsUpdate > 300) {
+                    this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsUpdate));
+                    this.frameCount = 0;
+                    this.lastFpsUpdate = now;
+
+                    const elFps = document.getElementById('dbg-fps');
+                    const elMs = document.getElementById('dbg-ms');
+                    const elSpeed = document.getElementById('dbg-speed');
+                    const elDist = document.getElementById('dbg-dist');
+                    const elTiles = document.getElementById('dbg-tiles');
+                    const elObs = document.getElementById('dbg-obs');
+                    const elCalls = document.getElementById('dbg-calls');
+                    const elTris = document.getElementById('dbg-tris');
+                    const elLane = document.getElementById('dbg-lane');
+                    const elY = document.getElementById('dbg-y');
+
+                    if (elFps) elFps.innerText = this.fps;
+                    if (elMs) elMs.innerText = (dt * 1000).toFixed(1);
+                    if (elSpeed) elSpeed.innerText = STATE.speed.toFixed(1);
+                    if (elDist) elDist.innerText = Math.floor(STATE.distance);
+                    if (elTiles) elTiles.innerText = activeSegments.length;
+                    
+                    let totalObs = 0;
+                    for (const s of activeSegments) totalObs += (s.userData.obstacles ? s.userData.obstacles.length : 0);
+                    if (elObs) elObs.innerText = totalObs;
+
+                    if (activeRenderer && activeRenderer.info) {
+                        if (elCalls) elCalls.innerText = activeRenderer.info.render.calls;
+                        if (elTris) elTris.innerText = activeRenderer.info.render.triangles;
+                    }
+                    if (elLane) elLane.innerText = STATE.currentLane;
+                    if (elY) elY.innerText = STATE.playerY.toFixed(2);
+                }
+            }
+        };
 
         // Input Handling: Swipe + Keyboard
         let touchStartX = 0;
@@ -2235,14 +2637,14 @@
             audio.init();
 
             if (action === 'LEFT') {
-                if (turnOpportunity && nextTurnType === 'TURN_LEFT') {
-                    executeTurn(Math.PI / 2);
+                if (turnOpportunity && (nextTurnType === 'TURN_LEFT' || nextTurnType === 'T_JUNCTION')) {
+                    executeTurn(Math.PI / 2, 'LEFT');
                 } else {
                     changeLane(-1);
                 }
             } else if (action === 'RIGHT') {
-                if (turnOpportunity && nextTurnType === 'TURN_RIGHT') {
-                    executeTurn(-Math.PI / 2);
+                if (turnOpportunity && (nextTurnType === 'TURN_RIGHT' || nextTurnType === 'T_JUNCTION')) {
+                    executeTurn(-Math.PI / 2, 'RIGHT');
                 } else {
                     changeLane(1);
                 }
@@ -2282,10 +2684,36 @@
             audio.playSlide();
         }
 
-        function executeTurn(angleDelta) {
+        function executeTurn(angleDelta, branch = null) {
             turnOpportunity = false;
-            document.getElementById('turn-indicator').style.display = 'none';
-            playerMesh.rotation.y += angleDelta;
+            const turnIndicator = document.getElementById('turn-indicator');
+            if (turnIndicator) {
+                turnIndicator.style.display = 'none';
+                turnIndicator.classList.remove('t-junction');
+            }
+
+            if (nextTurnType === 'T_JUNCTION' && activeTJunction) {
+                const tj = activeTJunction;
+                tj.userData.turnTrigger = false;
+                const baseAng = tj.userData.baseAngle;
+                currentAngle = baseAng + (branch === 'LEFT' ? Math.PI / 2 : -Math.PI / 2);
+                currentForward.set(Math.sin(currentAngle), 0, Math.cos(currentAngle));
+                
+                const localExit = (branch === 'LEFT') ? tj.userData.sockets.exitLeft : tj.userData.sockets.exitRight;
+                const worldExit = localExit.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), baseAng).add(tj.position);
+                currentAttachPos.copy(worldExit);
+
+                playerMesh.rotation.y = currentAngle;
+                activeTJunction = null;
+
+                // Spawn subsequent segments immediately along chosen direction
+                for (let i = 0; i < 3; i++) {
+                    generateNextSegment();
+                }
+            } else {
+                playerMesh.rotation.y += angleDelta;
+            }
+
             STATE.currentLane = 0;
             STATE.targetLaneX = 0;
             audio.playTurn();
@@ -2350,6 +2778,11 @@
 
             if (STATE.mode === 'RUNNING') {
                 updateGameplay(dt);
+            }
+
+            // Engine Debug Telemetry & Gizmo Updates
+            if (typeof DebugSystem !== 'undefined' && DebugSystem) {
+                DebugSystem.updateTelemetry(dt, renderer);
             }
 
             // Always render scene
@@ -2522,14 +2955,29 @@
                 // Check if segment is turn junction
                 if (seg.userData.turnTrigger) {
                     const distToJunction = seg.position.distanceTo(playerMesh.position);
-                    if (distToJunction < 12.0) {
+                    if (distToJunction < 14.0) {
                         turnOpportunity = true;
                         nextTurnType = seg.userData.type;
-                        document.getElementById('turn-indicator').style.display = 'block';
+                        const turnIndicator = document.getElementById('turn-indicator');
+                        if (turnIndicator) {
+                            if (seg.userData.type === 'T_JUNCTION') {
+                                turnIndicator.innerText = '⚠️ T-JUNCTION! SWIPE LEFT OR RIGHT ↰ ↱';
+                                turnIndicator.classList.add('t-junction');
+                            } else if (seg.userData.type === 'TURN_LEFT') {
+                                turnIndicator.innerText = '⬅️ TURN LEFT AHEAD!';
+                                turnIndicator.classList.remove('t-junction');
+                            } else {
+                                turnIndicator.innerText = 'TURN RIGHT AHEAD! ➡️';
+                                turnIndicator.classList.remove('t-junction');
+                            }
+                            turnIndicator.style.display = 'block';
+                        }
 
-                        // If player runs straight through junction without turning, fatal cliff drop!
-                        if (distToJunction < 1.5) {
-                            triggerGameOver("Missed the junction turn! Cop Daddy sealed the perimeter!");
+                        // If player runs straight through junction without turning, fatal collision!
+                        if (distToJunction < 1.6) {
+                            triggerGameOver(seg.userData.type === 'T_JUNCTION'
+                                ? "Missed the T-Junction turn! Crashed into perimeter wall!"
+                                : "Missed the junction turn! Cop Daddy sealed the perimeter!");
                             return;
                         }
                     }
@@ -2876,6 +3324,9 @@
 
         // Initialize Everything
         initGraphics();
+        if (typeof DebugSystem !== 'undefined' && DebugSystem) {
+            DebugSystem.init(scene);
+        }
         setupInputs();
         animate();
 
