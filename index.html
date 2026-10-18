@@ -478,65 +478,92 @@
 
         /* Mobile viewport responsiveness */
         @media (max-width: 480px) {
-            .dialog-card {
-                padding: 24px 16px;
-                border-radius: 18px;
-            }
             .modal-screen {
-                padding: 12px;
+                padding: 10px;
+                align-items: center;
+                justify-content: center;
+            }
+            .dialog-card {
+                padding: 18px 12px;
+                border-radius: 16px;
+                max-width: 100% !important;
+                width: 100% !important;
+                box-sizing: border-box;
+                margin: 0;
             }
             .game-title {
-                font-size: 30px;
+                font-size: 26px;
             }
             .subtitle {
-                font-size: 11px;
-                letter-spacing: 1.5px;
-            }
-            .controls-hint {
-                grid-template-columns: 1fr;
-                font-size: 11px;
-                padding: 8px 12px;
-                gap: 6px;
-            }
-            .controls-hint div {
-                margin: 4px 0;
+                font-size: 10px;
+                letter-spacing: 1px;
             }
             #offline-badge {
-                font-size: 10px !important;
+                font-size: 9px !important;
                 padding: 4px 8px !important;
-                max-width: 100%;
+                max-width: 100% !important;
                 box-sizing: border-box;
                 text-align: center;
                 line-height: 1.3;
+                white-space: normal !important;
+                word-break: break-word;
+                letter-spacing: 0px !important;
             }
-            #top-right-stats {
-                top: 14px;
-                right: 14px;
-                gap: 6px;
+            .btn {
+                padding: 11px 12px;
+                font-size: 14px;
+                border-radius: 12px;
             }
-            .stat-badge {
-                padding: 4px 10px;
-                min-width: 90px;
-            }
-            .stat-badge .stat-value {
+            .btn.btn-primary {
+                padding: 13px 16px;
                 font-size: 16px;
             }
+            .btn-group {
+                gap: 8px;
+                margin-top: 14px;
+            }
+            .controls-hint {
+                grid-template-columns: 1fr;
+                font-size: 10px;
+                padding: 6px 10px;
+                gap: 3px;
+                margin-top: 12px;
+            }
+            .controls-hint div {
+                margin: 2px 0;
+            }
+            #top-right-stats {
+                top: 12px;
+                right: 12px;
+                gap: 4px;
+            }
+            .stat-badge {
+                padding: 3px 8px;
+                min-width: 75px;
+            }
+            .stat-badge .stat-value {
+                font-size: 14px;
+            }
             #powerup-gauge-container {
-                top: 14px;
-                left: 14px;
+                top: 12px;
+                left: 12px;
             }
             .meter-capsule {
-                width: 42px;
-                height: 96px;
+                width: 38px;
+                height: 84px;
             }
             #bottom-right-controls {
-                bottom: 20px;
-                right: 16px;
+                bottom: 16px;
+                right: 12px;
             }
             .btn-pause-floating {
-                width: 50px;
-                height: 50px;
-                font-size: 18px;
+                width: 46px;
+                height: 46px;
+                font-size: 16px;
+            }
+            .btn-debug-chip {
+                padding: 4px 10px;
+                font-size: 10px;
             }
         }
 
