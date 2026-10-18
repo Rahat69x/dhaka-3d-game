@@ -8,7 +8,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
-        fallback: '404.html'
+        fallback: '404.html',
+        debug: 'debug.html'
       }
     }
   }

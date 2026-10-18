@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dhaka 3D Environment - Engineering Debug Viewer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #fff; }
+        #viewer-container { width: 100%; height: 100%; position: relative; }
+        #toolbar {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+        }
+        .btn {
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-sockets { background: #00e676; color: #0f172a; }
+        .btn-boxes { background: #ffea00; color: #0f172a; }
+        .btn-inactive { background: #334155; color: #94a3b8; }
+        #title-badge {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #38bdf8;
+            margin-right: 8px;
+        }
+        #info-overlay {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewer-container">
+        <div id="toolbar">
+            <span id="title-badge">DHAKA 3D SPEC VIEWER</span>
+            <button id="toggle-sockets" class="btn btn-sockets">Sockets: ON</button>
+            <button id="toggle-boxes" class="btn btn-boxes">Box3: ON</button>
+            <a href="./index.html" style="color: #cbd5e1; text-decoration: none; font-size: 13px; margin-left: 8px;">Back to Game →</a>
+        </div>
+        <div id="info-overlay">
+            Controls: Left-Click + Drag to Orbit | Scroll to Zoom | Top Row: 12 Catalog Tiles | Foreground: Socket-Snapped Route & 5 Lane Obstacles
+        </div>
+    </div>
+
+    <script type="module">
+        import { initDebugViewer } from './src/environment/debugViewer.js';
+
+        const container = document.getElementById('viewer-container');
+        const viewer = initDebugViewer(container);
+
+        const btnSockets = document.getElementById('toggle-sockets');
+        const btnBoxes = document.getElementById('toggle-boxes');
+
+        btnSockets.addEventListener('click', () => {
+            const on = viewer.toggleSockets();
+            btnSockets.className = on ? 'btn btn-sockets' : 'btn btn-inactive';
+            btnSockets.textContent = `Sockets: ${on ? 'ON' : 'OFF'}`;
+        });
+
+        btnBoxes.addEventListener('click', () => {
+            const on = viewer.toggleBoxes();
+            btnBoxes.className = on ? 'btn btn-boxes' : 'btn btn-inactive';
+            btnBoxes.textContent = `Box3: ${on ? 'ON' : 'OFF'}`;
+        });
+    </script>
+</body>
+</html>
